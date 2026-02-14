@@ -2,7 +2,7 @@
   <img src="assets/logo.svg" alt="MLEvolve" width="400"/>
 </p>
 
-An agentic MLE (Machine Learning Engineering) system that automatically solves Kaggle-style ML competitions through Monte Carlo Graph Search with multi-agent collaboration, built upon [AutoMLGen](https://arxiv.org/abs/2510.08511). MLEvolve achieves **#1 on the [MLE-bench](https://github.com/openai/mle-bench) leaderboard** with only 12 hours of runtime.
+An agentic MLE (Machine Learning Engineering) system that automatically solves Kaggle-style ML competitions through Monte Carlo Graph Search (MCGS) with multi-agent collaboration. This is an advanced version based on [AutoMLGen](https://arxiv.org/abs/2510.08511). MLEvolve achieves **#1 on the [MLE-bench](https://github.com/openai/mle-bench) leaderboard** with only 12 hours of runtime.
 
 ## Timeline
 
@@ -87,13 +87,13 @@ We thank [AIDE](https://github.com/WecoAI/aideml) and [ML-Master](https://github
 
 ## Citation
 
-If you find this work useful, please cite our paper:
+If you find this repo useful, you can also cite our earlier work.
 
 ```bibtex
 @article{du2025automlgen,
   title={AutoMLGen: Navigating Fine-Grained Optimization for Coding Agents},
-  author={Shangheng Du and Xiangchao Yan and others},
-  year={2025},
-  url={https://arxiv.org/abs/2510.08511}
+  author={Du, Shangheng and Yan, Xiangchao and Jiang, Dengyang and Yuan, Jiakang and Hu, Yusong and Li, Xin and He, Liang and Zhang, Bo and Bai, Lei},
+  journal={arXiv preprint arXiv:2510.08511},
+  year={2025}
 }
 ```
