@@ -1,11 +1,10 @@
-"""Classify tasks in competition_tag.json via Gemini function calling (structured output)."""
+"""Classify tasks in competition_tag.json via OpenAI-compatible API function calling (structured output)."""
 
 import json
 from pathlib import Path
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 API_KEY = ""       # fill in your API key
 BASE_URL = ""      # fill in your base URL
@@ -30,21 +29,25 @@ Rules:
 
 You MUST call the classify function with your answer."""
 
-CLASSIFY_FUNC = types.FunctionDeclaration(
-    name="classify",
-    description="Submit the classification result for a Kaggle competition task",
-    parameters={
-        "type": "object",
-        "properties": {
-            "category": {
-                "type": "string",
-                "enum": CATEGORIES,
-                "description": "The task category",
-            }
+CLASSIFY_FUNC = {
+    "type": "function",
+    "function": {
+        "name": "classify",
+        "description": "Submit the classification result for a Kaggle competition task",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "enum": CATEGORIES,
+                    "description": "The task category",
+                }
+            },
+            "required": ["category"],
         },
-        "required": ["category"],
     },
-)
+    "strict": True,
+}
 
 
 def load_task_desc(task_name: str) -> str:
@@ -56,40 +59,35 @@ def load_task_desc(task_name: str) -> str:
     return text[:3000]
 
 
-def classify_task(client: genai.Client, task_name: str, desc: str) -> str:
-    """Classify a single task via Gemini function calling."""
+def classify_task(client: OpenAI, task_name: str, desc: str) -> str:
+    """Classify a single task via OpenAI-compatible API function calling."""
     contents = f"{SYSTEM_PROMPT}\n\nTask name: {task_name}\n\nDescription:\n{desc}"
 
-    config = types.GenerateContentConfig(
-        temperature=1.0,
-        max_output_tokens=256,
-        thinking_config=types.ThinkingConfig(thinking_level="high"),
-        tools=[types.Tool(function_declarations=[CLASSIFY_FUNC])],
-        tool_config=types.ToolConfig(
-            function_calling_config=types.FunctionCallingConfig(
-                mode=types.FunctionCallingConfigMode.ANY,
-                allowed_function_names=["classify"],
-            )
-        ),
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-    )
-
-    response = client.models.generate_content(
+    response = client.chat.completions.create(
         model=MODEL,
-        contents=contents,
-        config=config,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": contents}
+        ],
+        tools=[CLASSIFY_FUNC],
+        tool_choice={"type": "function", "function": {"name": "classify"}},
+        temperature=1.0,
+        max_tokens=256,
+        extra_body={
+            "top_k": 20,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }, 
     )
 
-    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'function_call') and part.function_call:
-                category = dict(part.function_call.args).get("category", "")
-                if category in CATEGORIES:
-                    return category
-                print(f"  [WARN] invalid category for {task_name}: '{category}'")
-                return "Others"
+    if response.choices and response.choices[0].message and response.choices[0].message.tool_calls:
+        tool_call = response.choices[0].message.tool_calls[0]
+        category = tool_call.function.arguments.get("category", "")
+        if category in CATEGORIES:
+            return category
+        print(f"  [WARN] invalid category for {task_name}: '{category}'")
+        return "Others"
 
-    text = getattr(response, 'text', None) or ""
+    text = response.choices[0].message.content or ""
     print(f"  [WARN] no function call for {task_name}, got: '{text[:100]}'")
     return None
 
@@ -97,7 +95,7 @@ def classify_task(client: genai.Client, task_name: str, desc: str) -> str:
 RETRIES = 3
 
 
-def _single_call(client: genai.Client, task_name: str, desc: str, max_retries: int = 2) -> tuple:
+def _single_call(client: OpenAI, task_name: str, desc: str, max_retries: int = 2) -> tuple:
     """Single vote call; retries when classify_task returns None."""
     for attempt in range(max_retries):
         try:
@@ -114,7 +112,7 @@ def main():
     # fill in your task names here
     task_names = []
 
-    client = genai.Client(api_key=API_KEY, http_options={"base_url": BASE_URL})
+    client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
     print(f"=== Processing {len(task_names)} tasks (x{RETRIES} vote) ===\n")
 
     descs = {name: load_task_desc(name) for name in task_names}

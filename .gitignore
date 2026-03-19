@@ -1,3 +1,6 @@
+config/
+*.tar.gz
+
 # ===== Python =====
 __pycache__/
 *.py[cod]

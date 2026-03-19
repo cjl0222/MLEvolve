@@ -91,7 +91,7 @@ def build_model_prompt(
     user_prompt: str,
     assistant_suffix: str,
 ):
-    """Build Gemini prompt format (plain text).
+    """Build prompt format (plain text).
 
     Returns:
         str
@@ -326,7 +326,7 @@ def run_planner(
     for attempt in range(max_retries):
         logger.info(f"Calling {stage_name} Agent to analyze which modules to modify... (attempt {attempt + 1}/{max_retries})")
 
-        json_schema = PLANNING_JSON_SCHEMA if "gemini" in model_name else None
+        json_schema = PLANNING_JSON_SCHEMA if model_name else None
 
         planning_response = generate(
             prompt=planning_prompt_complete,

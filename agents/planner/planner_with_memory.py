@@ -178,7 +178,7 @@ def refine_plan_to_json(
         assistant_suffix=assistant_suffix,
     )
 
-    json_schema = PLANNING_JSON_SCHEMA if "gemini" in model_name else None
+    json_schema = PLANNING_JSON_SCHEMA if model_name else None
     max_retries = 3
     planning_result = None
 

@@ -1,6 +1,6 @@
 import logging
-from . import gemini as _gemini
-from .gemini import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
+from . import openai_compatible as _openai
+from .openai_compatible import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
 from config import Config
 logger = logging.getLogger("MLEvolve")
 
@@ -22,7 +22,7 @@ def query(
     Args:
         system_message (PromptType | None): Uncompiled system message (will generate a message following the OpenAI/Anthropic format)
         user_message (PromptType | None): Uncompiled user message (will generate a message following the OpenAI/Anthropic format)
-        model (str): string identifier for the model to use (e.g. "gemini-3-pro-preview")
+        model (str): string identifier for the model to use (e.g., "gpt-4", "gpt-3.5-turbo")
         temperature (float | None, optional): Temperature to sample at. Defaults to the model-specific default.
         max_tokens (int | None, optional): Maximum number of tokens to generate. Defaults to the model-specific max tokens.
         func_spec (FunctionSpec | None, optional): Optional FunctionSpec object defining a function call. If given, the return value will be a dict.
@@ -53,7 +53,7 @@ def query(
     if func_spec:
         logger.info(f"function spec: {func_spec.to_dict()}", extra={"verbose": True})
 
-    output, req_time, in_tok_count, out_tok_count, info = _gemini.query(
+    output, req_time, in_tok_count, out_tok_count, info = _openai.query(
         system_message=system_message,
         user_message=user_message,
         func_spec=func_spec,

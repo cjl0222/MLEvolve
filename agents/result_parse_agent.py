@@ -401,7 +401,7 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
                 ),
             )
 
-            # Gemini structured output may omit required fields; fill defaults
+            # Model may omit required fields; fill defaults
             response.setdefault("is_bug", True)
             response.setdefault("summary", "No summary returned by model.")
             response.setdefault("metric", None)
