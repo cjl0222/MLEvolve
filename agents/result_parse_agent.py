@@ -74,7 +74,7 @@ def determine_metric_direction(agent) -> None:
                 query(
                     system_message=prompt,
                     user_message=None,
-                    func_spec=metric_direction_func_spec,
+                    func_spec=metric_direction_func_spec, # 发了 LLM 的 function calling / structured output 模式
                     model=agent.acfg.feedback.model,
                     temperature=agent.acfg.feedback.temp,
                     cfg=agent.cfg
@@ -401,7 +401,7 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
                 ),
             )
 
-            # Model may omit required fields; fill defaults
+            #  Gemini structured output? Model may omit required fields; fill defaults
             response.setdefault("is_bug", True)
             response.setdefault("summary", "No summary returned by model.")
             response.setdefault("metric", None)

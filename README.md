@@ -59,10 +59,10 @@ dataset_dir: "/path/to/mle-bench/data"
 
 agent:
   code:
-    base_url: "https://your-gemini-endpoint"
+    base_url: "https://api.openai.com/v1"  # or your OpenAI-compatible endpoint
     api_key: "your-api-key"
   feedback:
-    base_url: "https://your-gemini-endpoint"
+    base_url: "https://api.openai.com/v1"  # or your OpenAI-compatible endpoint
     api_key: "your-api-key"
 ```
 
@@ -106,3 +106,7 @@ If you find this repo useful, you can also cite our earlier work.
   year={2026}
 }
 ```
+
+unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy
+
+bash run_single_task.sh nomad2018-predict-transparent-conductors /home/zhangwh/.cache/mle-bench/data 1
