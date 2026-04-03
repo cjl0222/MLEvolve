@@ -14,6 +14,7 @@ from dataclasses_json import DataClassJsonMixin
 from engine.executor import ExecutionResult
 from config import SearchConfig
 from utils.metric import MetricValue
+from utils.metric import WorstMetricValue
 from utils.response import trim_long_string
 
 logger = logging.getLogger("MLEvolve")
@@ -24,55 +25,57 @@ class SearchNode(DataClassJsonMixin):
     """Solution tree node: code, execution results, evaluation, and search metadata."""
 
     # ---- code & plan ----
-    code: str
-    plan: str = field(default=None, kw_only=True)  # type: ignore
-    prompt_input: str | None = field(default=None, kw_only=True)  # type: ignore
+    code: str # 该节点对应的代码字符串
+    plan: str = field(default=None, kw_only=True)  # type: ignore 生成该代码的计划/思路 
+    prompt_input: str | None = field(default=None, kw_only=True)  # type: ignore  输入给 LLM 的提示词
 
     # ---- general attrs ----
-    step: int = field(default=None, kw_only=True)  # type: ignore
+    # 同时跑3个节点，跑完一个补一个，直到累计跑满500个节点为止。搜索树的宽度/深度由 MCTS 的节点选择策略决定，500 只是总预算。
+    step: int = field(default=None, kw_only=True)  # type: ignore  当前节点在整个搜索过程中的步骤编号（从0开始递增）STEP_LIMIT=500 → cfg.agent.steps → total_steps，是整个搜索树的节点总数上限，即 journal 里最多生成 500 个节点。 一棵树最多500节点
     id: str = field(default_factory=lambda: uuid.uuid4().hex, kw_only=True)
     ctime: float = field(default_factory=lambda: time.time(), kw_only=True)
     parent: Optional["SearchNode"] = field(default=None, kw_only=True)
     children: set["SearchNode"] = field(default_factory=set, kw_only=True)
 
     # ---- execution info ----
-    _term_out: list[str] = field(default=None, kw_only=True)  # type: ignore
+    _term_out: list[str] = field(default=None, kw_only=True)  # type: ignore  终端输出内容
     exec_time: float = field(default=None, kw_only=True)  # type: ignore
-    exc_type: str | None = field(default=None, kw_only=True)
+    exc_type: str | None = field(default=None, kw_only=True) # 异常信息（如果代码报错)
     exc_info: dict | None = field(default=None, kw_only=True)
     exc_stack: list[tuple] | None = field(default=None, kw_only=True)
 
     # ---- evaluation ----
-    analysis: str = field(default=None, kw_only=True)  # type: ignore
-    metric: MetricValue = field(default=None, kw_only=True)  # type: ignore
-    is_buggy: bool = field(default=None, kw_only=True)  # type: ignore
+    analysis: str = field(default=None, kw_only=True)  # type: ignore  LLM 对代码的分析文本
+    metric: MetricValue = field(default=None, kw_only=True)  # type: ignore  包含数值和优化方向的评估指标
+    is_buggy: bool = field(default=None, kw_only=True)  # type: ignore 代码是否有 bug / 是否有效
     is_valid: bool = field(default=None, kw_only=True)  # type: ignore
 
     # ---- search / MCTS ----
+    # 每个节点代表一个"代码版本"，通过 MCTS + 贝叶斯采样决定哪个节点值得继续展开，最终找到最优代码。
     stage: Literal["root", "improve", "debug", "draft", "fusion_draft", "evolution", "fusion"]
-    visits: int = field(default=0, kw_only=True)
-    total_reward: float = field(default=0.0, kw_only=True)
-    is_terminal: bool = field(default=False, kw_only=True)
-    _uct: float = field(default=0.0, kw_only=True)
-    local_best_node: Optional["SearchNode"] = field(default=None, kw_only=True)
-    is_debug_success: bool = field(default=False, kw_only=True)
-    continue_improve: bool = field(default=False, kw_only=True)
-    improve_failure_depth: int = field(default=0, kw_only=True)
-    lock: bool = field(default=False, kw_only=True)
-    child_count_lock: bool = threading.Lock()
-    expected_child_count: int = field(default=0, kw_only=True)
-    finish_time: str = field(default=None, kw_only=True)
-    created_time: str = field(default=None, kw_only=True)
+    visits: int = field(default=0, kw_only=True) # MCTS 标准字段（访问次数、累计奖励、UCT 值）
+    total_reward: float = field(default=0.0, kw_only=True) # 累计奖励（UCT 公式中的 Q 的分子）。每次从该节点反向传播时累加子节点的 metric 值，用于计算平均奖励 Q = total_reward / visits。
+    is_terminal: bool = field(default=False, kw_only=True) # 是否为终止节点  为 True 时 MCTS 不再展开该节点的子节点（例如达到最大调试深度、或已找到理想解）。
+    _uct: float = field(default=0.0, kw_only=True) # 缓存的 UCT 值（前缀 _ 表示内部使用）。uct_value() 方法计算后写入此字段做缓存，避免重复计算
+    local_best_node: Optional["SearchNode"] = field(default=None, kw_only=True) # 以本节点为根的子树中当前最优节点的引用。用于剪枝和快速定位局部最优解，避免每次遍历整棵子树。
+    is_debug_success: bool = field(default=False, kw_only=True) # 调试是否成功。当一个 debug 阶段节点修复了父节点的 bug 后置为 True，用于统计调试成功率和指导后续策略
+    continue_improve: bool = field(default=False, kw_only=True) # 是否继续改进。标记该节点还有改进潜力，即使当前 metric 不是最高，搜索策略也应继续从此节点展开 improve 子节点。
+    improve_failure_depth: int = field(default=0, kw_only=True) # 连续改进失败的深度计数。若 improve 子节点连续多次 metric 未提升，此值递增，可用于决定何时放弃继续改进当前分支。
+    lock: bool = field(default=False, kw_only=True) # 节点软锁。并发场景下标记该节点"已被某个 worker 认领"，防止多个线程同时对同一节点展开子节点（逻辑锁，非系统互斥锁）。
+    child_count_lock: bool = threading.Lock() #  线程互斥锁 用于保护 expected_child_count 的并发读写，见 add_expected_child_count() 和 reached_child_limit()
+    expected_child_count: int = field(default=0, kw_only=True) # 预期子节点总数（包含"飞行中"尚未生成完毕的子节点）。并发展开时，worker 启动前先 +1（add_expected_child_count），完成后 -1（sub_expected_child_count），配合 reached_child_limit() 防止超额生成子节点。
+    finish_time: str = field(default=None, kw_only=True)  # 节点完成时间戳（字符串格式）。记录该节点代码执行+评估完毕的时刻，用于日志、性能分析和可视化。
+    created_time: str = field(default=None, kw_only=True) # 节点创建时间戳
 
     # ---- Bayesian sampling ----
-    alpha: int = field(default=1, kw_only=True)
-    beta: int = field(default=1, kw_only=True)
+    alpha: int = field(default=1, kw_only=True) # alpha 和 beta 是 Beta 分布的两个超参数，用于贝叶斯 Thompson 采样  均值p_mean() = alpha / (alpha + beta) 代表该节点历史成功率的贝叶斯估计  每次子节点执行成功 → alpha += 1  每次子节点执行失败 → beta += 1  
+    beta: int = field(default=1, kw_only=True) # 相比纯 UCT，Thompson 采样在探索早期（数据少）时更鲁棒，避免过早锁定某个看似优秀但样本不足的节点。 节点被选中的概率正比于从 Beta(alpha, beta) 采样得到的值
 
     # ---- branch management ----
-    branch_id: Optional[int] = field(default=None, kw_only=True)
-    from_topk: bool = field(default=False, kw_only=True)
-    code_summary: Optional[str] = field(default=None, kw_only=True)
-    work_dir: Optional[str] = field(default=None, kw_only=True)
+    branch_id: Optional[int] = field(default=None, kw_only=True) # 搜索分支的唯一编号。整个搜索树被划分为多条"分支"，每条分支是一条从某个节点出发的独立探索路径。
+    from_topk: bool = field(default=False, kw_only=True) # 标记该节点是否来自 Top-K 主动利用（exploitation）触发。
+    code_summary: Optional[str] = field(default=None, kw_only=True) # LLM 生成的代码方法摘要文本，是全局记忆（Global Memory）系统的核心数据来源。
+    work_dir: Optional[str] = field(default=None, kw_only=True) # 节点代码执行时使用的工作目录路径。设计意图是支持每个节点在独立的沙箱目录中运行，避免不同节点的文件产物互相干扰。 但在整个项目中没有被任何代码读取或赋值，属于预留字段（占位符）
 
     def __post_init__(self) -> None:
         if self.parent is not None:
@@ -151,31 +154,34 @@ class SearchNode(DataClassJsonMixin):
 
     def reached_child_limit(self, scfg: SearchConfig, for_topk: bool = False) -> bool:
         """Whether this node has reached its child limit (draft/improve/debug). for_topk uses higher limit."""
-        with self.child_count_lock:
-            if self.step == 0:
-                regular_draft_count = sum(1 for child in self.children if child.stage == "draft")
+        # 判断当前节点是否已达到子节点上限，返回 True 表示"不能再展开新子节点"。
+        with self.child_count_lock: # 加互斥锁，保护后续对 children、expected_child_count 的读取，防止多线程并发时数据竞争。
+            if self.step == 0: # 根节点，其子节点都是初始草稿
+                regular_draft_count = sum(1 for child in self.children if child.stage == "draft") # 统计已完成生成的普通草稿子节点数（排除 fusion_draft 等其他类型）
                 # expected_child_count includes in-flight children; estimate in-flight drafts
-                in_flight = max(0, self.expected_child_count - len(self.children))
-                regular_expected = regular_draft_count + in_flight
+                in_flight = max(0, self.expected_child_count - len(self.children)) # 计算飞行中（in-flight） 的子节点数：expected_child_count 是"已预订但还没生成完"的总预期数，减去已经存在的子节点数，就是还在生成中的数量。
+                regular_expected = regular_draft_count + in_flight # 有效草稿总数 = 已完成的草稿 + 正在生成的草稿，代表"最终会存在的草稿数量"
                 logger.info(f"[reached_child_limit] node {self.id} regular_draft_count={regular_draft_count}, in_flight={in_flight}, limit={scfg.num_drafts}")
-                return regular_expected >= scfg.num_drafts
-            else:
-                if self.is_buggy:
-                    if self.has_no_bug_child():
+                return regular_expected >= scfg.num_drafts # 若有效草稿总数 ≥ 配置的草稿上限 num_drafts，则返回 True（拒绝再生成新草稿）。
+            else: # 非根节点（step > 0）
+                if self.is_buggy: # 当前节点有 bug → 展开 debug 子节点
+                    if self.has_no_bug_child(): # 如果子节点中已有至少一个无 bug 的节点，立即返回 True，不再继续调试。 逻辑：只要修好过一次，这条调试路径就算完成，无需再生成更多 debug 节点。
                         return True
                     else:
-                        return self.expected_child_count >= scfg.num_bugs
-                else:
-                    if for_topk:
-                        topk_max_improves = getattr(scfg, 'topk_max_improves', 10)
+                        return self.expected_child_count >= scfg.num_bugs # 如果还没修好，则检查已预期的调试子节点数是否达到 num_bugs 上限（防止无限重试）。
+                else: # 当前节点无 bug → 展开 improve 子节点
+                    if for_topk: # 调用方是否来自 Top-K 利用模式（允许更高上限）
+                        topk_max_improves = getattr(scfg, 'topk_max_improves', 10) # Top-K 利用模式：使用更宽松的上限 topk_max_improves（默认 10，比普通 num_improves 更大），允许对高质量节点做更多次改进尝试。
                         return self.expected_child_count >= topk_max_improves
                     else:
                         regular_expected = sum(
                             1 for child in self.children
                             if not getattr(child, 'from_topk', False)
-                        )
-                        regular_expected += (self.expected_child_count - len(self.children))
-                        return regular_expected >= scfg.num_improves
+                        ) # 普通探索模式：只统计 from_topk=False 的子节点，即排除 Top-K 触发的子节点。这样 Top-K 额外生成的节点不会占用普通 improve 的配额，两套预算互相独立。
+                        regular_expected += (self.expected_child_count - len(self.children)) # 加上飞行中的子节点数（与根节点处理飞行中草稿的逻辑相同），估算最终会有多少普通 improve 子节点。  飞行中的节点无法区分是否 top-k，全部计入
+                        # 这个误差会导致 regular_expected 偏大，使 reached_child_limit() 更容易提前返回 True，即：
+                        # 本来还有配额生成普通 improve 子节点，但因为飞行中的 top-k 节点被误算进来，导致判断为"已满"，错误地拦截了新的普通 improve 展开。
+                        return regular_expected >= scfg.num_improves # 若普通 improve 子节点总数 ≥ num_improves 上限，返回 True。 
 
     
     def update(self, result, add=True):
@@ -195,18 +201,20 @@ class SearchNode(DataClassJsonMixin):
 
     def fetch_child_memory(self, include_code=False):
         """Build memory string from children for the model (include draft nodes; optionally include code diff)."""
+        # 核心作用：将当前节点的所有子节点的执行结果整理成一段结构化文本，作为"记忆"注入给 LLM，让它知道"之前试过哪些方案、结果如何"，从而生成更好的下一版代码。
         logger.info("fetch_child_memory")
         summary = []
 
         sorted_children = sorted(
-            [n for n in self.children if n.is_buggy is not None or n.stage == "draft"],
+            [n for n in self.children if n.is_buggy is not None or n.stage == "draft"], # 过滤条件：保留已执行（is_buggy is not None）或草稿阶段（stage == "draft"）的子节点，排除其他中间状态。
             key=lambda n: (
                 n.is_buggy is False,
                 n.is_buggy is not None,
-                n.metric.value if (n.metric and n.metric.value is not None) else float('-inf')
+                # n.metric.value if (n.metric and n.metric.value is not None) else float('-inf')
+                n.metric if n.metric is not None else WorstMetricValue()
             ),
             reverse=True
-        )
+        ) # 无 bug + metric 最高: 最成功的方案，LLM 最应参考;  无 bug + metric 较低:成功但一般;  有 bug（已执行）: 失败方案，提示 LLM 避开   待执行（is_buggy=None）: 草稿，还不知道好不好 
 
         for idx, n in enumerate(sorted_children, 1):
             summary_part = f"Attempt #{idx}:\n"
@@ -219,7 +227,7 @@ class SearchNode(DataClassJsonMixin):
                 else:
                     summary_part += f"Code Changes: (minimal or formatting changes only)\n"
 
-            if n.is_buggy is None:
+            if n.is_buggy is None: # 草稿
                 summary_part += f"Status: Code generated, execution pending (will run in parallel with other drafts).\n"
             elif n.is_buggy is True:
                 summary_part += f"Results: The implementation of this design has bugs.\n"
@@ -249,7 +257,8 @@ class SearchNode(DataClassJsonMixin):
             if executed:
                 stats_parts.append(f"{len(executed)} executed")
                 if successful:
-                    best_metric = max(n.metric.value for n in successful if n.metric and n.metric.value is not None)
+                    # best_metric = max(n.metric.value for n in successful if n.metric and n.metric.value is not None)
+                    best_metric = max(n.metric for n in successful if n.metric and n.metric.value is not None)
                     stats_parts.append(f"{len(successful)} successful (best: {best_metric:.4f})")
                 else:
                     stats_parts.append(f"0 successful (all failed or buggy)")
@@ -298,10 +307,10 @@ class SearchNode(DataClassJsonMixin):
         diff = difflib.unified_diff(
             parent_lines,
             child_lines,
-            fromfile='Parent Code',
+            fromfile='Parent Code', 
             tofile='Modified Code',
-            lineterm='',
-            n=context_lines
+            lineterm='', # 不额外添加换行符（已由 keepends=True 保留）
+            n=context_lines  # 每处变动前后各保留 3 行上下文
         )
 
         diff_lines = list(diff)
@@ -309,14 +318,14 @@ class SearchNode(DataClassJsonMixin):
             return ""
 
         formatted_diff = []
-        for line in diff_lines[2:]:
-            if line.startswith('@@'):
+        for line in diff_lines[2:]:  #  跳过 "--- Parent Code" 和 "+++ Modified Code" 两行文件头
+            if line.startswith('@@'): # 不显示（去掉行号信息）
                 continue
-            elif line.startswith('+') and not line.startswith('+++'):
+            elif line.startswith('+') and not line.startswith('+++'): # 新增行
                 formatted_diff.append(f"  + {line[1:]}")
-            elif line.startswith('-') and not line.startswith('---'):
-                formatted_diff.append(f"  - {line[1:]}")
-            elif not line.startswith(('---', '+++')):
+            elif line.startswith('-') and not line.startswith('---'): # 删除行
+                formatted_diff.append(f"  - {line[1:]}") 
+            elif not line.startswith(('---', '+++')):  # 其他（上下文行）	保留，但限制总行数 < 100	内容（4空格缩进）
                 if len(formatted_diff) < 100:
                     formatted_diff.append(f"    {line}")
 
@@ -340,7 +349,7 @@ class SearchNode(DataClassJsonMixin):
             summary.append(summary_part)
         return "\n-------------------------------\n".join(summary)
     
-    def add_expected_child_count(self):
+    def add_expected_child_count(self): # 两个方法配对使用，管理"预订计数器"的生命周期
         with self.child_count_lock:
             self.expected_child_count += 1
             logger.info(f"current {self.id} expected_child_count is {self.expected_child_count}.")
@@ -351,7 +360,7 @@ class SearchNode(DataClassJsonMixin):
             self.expected_child_count -= 1
             logger.info(f"current {self.id} expected_child_count is {self.expected_child_count}.")
 
-    def __getstate__(self):
+    def __getstate__(self): # 这两个是 Python pickle 序列化协议的钩子，用于控制对象的序列化和反序列化行为。
         state = self.__dict__.copy()
         state.pop('child_count_lock', None) 
         return state

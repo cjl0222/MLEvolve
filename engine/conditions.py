@@ -8,6 +8,11 @@ logger = logging.getLogger("MLEvolve")
 
 def should_trigger_branch_fusion(agent) -> bool:
     """Whether to trigger multi-branch aggregation: time window, min branches with success, global stagnation, under max attempts."""
+    # 1. fusion_draft 数量未超 max_fusion_drafts
+    # 2. 已在时间窗口内：fusion_min_time_hours ~ fusion_max_time_hours
+    # 3. 至少 fusion_min_branches 个分支各有 fusion_min_successful_nodes 个成功节点
+    # 4. 全局陷入停滞（最近 window_size 个节点无显著提升）
+    # 5. 随机概率 < branch_fusion_trigger_prob（概率门控）
     if agent.fusion_draft_count >= agent.max_fusion_drafts:
         return False
 

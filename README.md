@@ -107,6 +107,19 @@ If you find this repo useful, you can also cite our earlier work.
 }
 ```
 
+1、取消代理
 unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy
 
+2、开启模型(vllm或ollama)
+（1）开启ollama：略
+（2）开启vllm：  
+    conda activate vllm-mlevolve
+    export CUDA_VISIBLE_DEVICES=0,1 
+    vllm serve Qwen/Qwen3.5-35B-A3B-GPTQ-Int4 --port 8000 --tensor-parallel-size 2 --max-model-len  32768  --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --quantization moe_wna16 --gpu-memory-utilization 0.85
+（3）配置模型baseURL
+
+3、运行项目
+conda activate mlevolve
 bash run_single_task.sh nomad2018-predict-transparent-conductors /home/zhangwh/.cache/mle-bench/data 1
+
+
