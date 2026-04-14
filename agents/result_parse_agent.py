@@ -154,10 +154,10 @@ def _build_introduction(agent) -> str:
         "You have written code to solve this task and now need to evaluate the output of the code execution. "
         "You should determine if there were any bugs as well as report the empirical findings.\n\n"
         "You MUST respond with a JSON object containing ALL of the following fields:\n"
-        "- \"is_bug\": (boolean) true if execution failed or has bugs, false otherwise.\n"
+        "- \"is_bug\": (boolean) true if execution failed or has bugs, false otherwise. Must be a JSON boolean (true/false), NOT a string.\n"
         "- \"summary\": (string) A concise 2-3 sentence summary of the execution outcome.\n"
-        "- \"metric\": (number or null) The validation metric value if the code ran successfully, otherwise null.\n"
-        "- \"lower_is_better\": (boolean) true if the metric should be minimized, false if maximized.\n"
+        "- \"metric\": (number or null) The validation metric value as a raw JSON number (e.g. 0.9995), NOT a string. If failed, use null.\n"
+        "- \"lower_is_better\": (boolean) true if the metric should be minimized, false if maximized. Must be a JSON boolean (true/false), NOT a string.\n"
     )
     if use_memory:
         intro += (
@@ -410,7 +410,15 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
 
             metric_val = response.get("metric")
             if not isinstance(metric_val, (int, float)):
-                response["metric"] = None
+                try:
+                    response["metric"] = float(metric_val)
+                except (TypeError, ValueError):
+                    response["metric"] = None
+
+            for bool_field in ("is_bug", "lower_is_better"):
+                v = response.get(bool_field)
+                if isinstance(v, str):
+                    response[bool_field] = v.strip().lower() not in ("false", "0", "no", "")
 
             has_csv_submission = _check_submission_file(agent, node)
 

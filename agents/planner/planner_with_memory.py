@@ -14,6 +14,7 @@ import logging
 from typing import Dict, Any
 
 from llm import generate, compile_prompt_to_md
+from llm.model_profiles import thinking_json_incompatible
 from utils.response import wrap_code
 from .base_planner import (
     PLANNING_ALLOWED_MODULES,
@@ -178,7 +179,7 @@ def refine_plan_to_json(
         assistant_suffix=assistant_suffix,
     )
 
-    json_schema = PLANNING_JSON_SCHEMA if model_name else None
+    json_schema = PLANNING_JSON_SCHEMA
     max_retries = 3
     planning_result = None
 
@@ -211,6 +212,16 @@ def refine_plan_to_json(
             if attempt < max_retries - 1:
                 continue
             else:
+                raw = planning_result.get("raw_response", "")
+                if raw and thinking_json_incompatible(agent_instance.acfg.code.model):
+                    logger.warning("Qwen thinking mode: using raw response as fallback plan")
+                    return {
+                        "reason": raw,
+                        "module": [],
+                        "plan": {},
+                        "parse_success": True,
+                        "raw_response": raw,
+                    }
                 return planning_result
 
         modules = planning_result.get("module", [])

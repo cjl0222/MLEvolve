@@ -8,6 +8,7 @@ An agentic MLE (Machine Learning Engineering) system that automatically solves K
 
 ## Timeline
 
+- **2026-03-23** — Now supports OpenAI-compatible APIs (GPT, Qwen, DeepSeek, etc.). Models with function calling support are recommended for best performance.
 - **2026-02-14** — MLEvolve codebase is now open-source.
 - **2026-02-14** — MLEvolve achieves **#1 on MLE-bench** (12-hour budget).
 
@@ -67,6 +68,8 @@ agent:
 ```
 
 Other tunable fields (`agent.steps`, `agent.time_limit`, etc.) have sensible defaults — see comments in the yaml file.
+
+If `agent.use_global_memory: True`, you must also set `agent.memory_embedding_model_path` to a valid HuggingFace embedding model name or local model path. Set `agent.memory_embedding_device` to `cpu` if CUDA is unavailable.
 
 ### Cold-Start Models (optional)
 

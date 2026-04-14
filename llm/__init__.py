@@ -1,8 +1,14 @@
 import logging
-from . import openai_compatible as _openai
-from .openai_compatible import FunctionSpec, OutputType, PromptType, compile_prompt_to_md, generate
+from . import gemini as _gemini
+from . import openai as _openai
+from .gemini import FunctionSpec, OutputType, PromptType, compile_prompt_to_md
 from config import Config
 logger = logging.getLogger("MLEvolve")
+
+
+def _provider(model: str) -> str:
+    """Use Gemini backend for model names starting with 'gemini', else OpenAI-compatible (e.g. Qwen)."""
+    return "gemini" if (model or "").lower().startswith("gemini") else "openai"
 
 
 def query(
@@ -53,13 +59,58 @@ def query(
     if func_spec:
         logger.info(f"function spec: {func_spec.to_dict()}", extra={"verbose": True})
 
-    output, req_time, in_tok_count, out_tok_count, info = _openai.query(
-        system_message=system_message,
-        user_message=user_message,
-        func_spec=func_spec,
-        cfg=cfg,
-        **model_kwargs,
-    )
+    provider = _provider(model)
+    if provider == "openai":
+        output, req_time, in_tok_count, out_tok_count, info = _openai.query(
+            system_message=system_message,
+            user_message=user_message,
+            func_spec=func_spec,
+            cfg=cfg,
+            **model_kwargs,
+        )
+    else:
+        output, req_time, in_tok_count, out_tok_count, info = _gemini.query(
+            system_message=system_message,
+            user_message=user_message,
+            func_spec=func_spec,
+            cfg=cfg,
+            **model_kwargs,
+        )
     logger.info("---Query complete---", extra={"verbose": True})
 
     return output
+
+
+def generate(
+    prompt,
+    cfg,
+    temperature=None,
+    max_tokens=None,
+    stop_tokens=None,
+    json_schema=None,
+    max_retries=20,
+    retry_delay=3,
+):
+    """Streaming text generation. Dispatches to Gemini or OpenAI-compatible backend by cfg.agent.code.model."""
+    model = getattr(cfg.agent.code, "model", "") or ""
+    if _provider(model) == "openai":
+        return _openai.generate(
+            prompt=prompt,
+            cfg=cfg,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stop_tokens=stop_tokens,
+            json_schema=json_schema,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+        )
+    return _gemini.generate(
+        prompt=prompt,
+        cfg=cfg,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stop_tokens=stop_tokens,
+        json_schema=json_schema,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+    )

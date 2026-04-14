@@ -8,7 +8,7 @@ from engine.search_node import SearchNode
 from utils.response import wrap_code
 from agents.prompts import prompt_resp_fmt, get_impl_guideline_from_agent
 from agents.improve_agent import run as run_improve
-from agents.planner import run_planner, build_planner_task
+from agents.planner import run_planner, build_planner_task, build_chat_prompt_for_model
 from agents.coder import plan_and_code_query
 from agents.coder.diff_coder import diff_generate_and_apply
 from engine import solution_manager
@@ -134,7 +134,8 @@ def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> S
     instructions += compile_prompt_to_md(prompt["Instructions"], 2)
 
     user_prompt = f"\n# Task description\n{prompt['Task description']}\n\n# Reference Solution\n{prompt['Reference Solution']}\n\n{instructions}"
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nMy current solution:\nPlan: {prompt['Current Solution']['Plan']}\nCode: {prompt['Current Solution']['Code']}\nPerformance: {prompt['Current Solution']['Performance']}\nAnalysis: {prompt['Current Solution']['Analysis']}\nI'll now analyze the reference solution and selectively incorporate its best ideas."
+    assistant_prefix = f"Let me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nMy current solution:\nPlan: {prompt['Current Solution']['Plan']}\nCode: {prompt['Current Solution']['Code']}\nPerformance: {prompt['Current Solution']['Performance']}\nAnalysis: {prompt['Current Solution']['Analysis']}\nI'll now analyze the reference solution and selectively incorporate its best ideas."
+    prompt_complete = build_chat_prompt_for_model(agent.acfg.code.model, introduction, user_prompt, assistant_prefix)
 
     if agent.acfg.use_diff_mode:
         try:
@@ -275,7 +276,8 @@ def _fuse_with_multiple_references(
     instructions += compile_prompt_to_md(prompt["Instructions"], 2)
 
     user_prompt = f"\n# Task description\n{prompt['Task description']}\n\n# Reference Solutions\n{prompt['Reference Solutions']}\n\n{instructions}"
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nMy current solution:\nPlan: {prompt['Current Solution']['Plan']}\nCode: {prompt['Current Solution']['Code']}\nPerformance: {prompt['Current Solution']['Performance']}\nAnalysis: {prompt['Current Solution']['Analysis']}\nI'll now analyze the reference solutions and selectively incorporate the best ideas."
+    assistant_prefix = f"Let me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nMy current solution:\nPlan: {prompt['Current Solution']['Plan']}\nCode: {prompt['Current Solution']['Code']}\nPerformance: {prompt['Current Solution']['Performance']}\nAnalysis: {prompt['Current Solution']['Analysis']}\nI'll now analyze the reference solutions and selectively incorporate the best ideas."
+    prompt_complete = build_chat_prompt_for_model(agent.acfg.code.model, introduction, user_prompt, assistant_prefix)
 
     if agent.acfg.use_diff_mode:
         try:
@@ -423,7 +425,7 @@ def _diff_fusion(agent, prompt_base, data_preview, source_node):
     modules = planning_result.get('module', [])
     plans = planning_result.get('plan', {})
 
-    if not modules and not plans:
+    if not planning_result.get("parse_success", False):
         raise RuntimeError("Fusion planner returned empty result, triggering outer fallback")
 
     if not modules and plans:
@@ -473,7 +475,7 @@ def _diff_multi_fusion(agent, prompt_base, data_preview, parent_node):
     modules = planning_result.get('module', [])
     plans = planning_result.get('plan', {})
 
-    if not modules and not plans:
+    if not planning_result.get("parse_success", False):
         raise RuntimeError("Multi-fusion planner returned empty result, triggering outer fallback")
 
     if not modules and plans:

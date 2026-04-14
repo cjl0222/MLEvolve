@@ -2,7 +2,8 @@
 
 import logging
 import time
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 from llm import compile_prompt_to_md
 from engine.search_node import SearchNode
@@ -15,11 +16,33 @@ from agents.prompts import (
     get_prompt_environment,
     get_impl_guideline_from_agent,
 )
+from agents.planner import build_chat_prompt_for_model
 
 logger = logging.getLogger("MLEvolve")
 
 
-def run(agent) -> SearchNode:
+def run(agent, init_solution_path: Optional[str] = None) -> SearchNode:
+    """Generate initial draft. If init_solution_path is provided and readable, use file content directly."""
+    if init_solution_path:
+        try:
+            code = Path(init_solution_path).read_text(encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to read init_solution from {init_solution_path}: {e}, falling back to LLM generation")
+            init_solution_path = None
+        else:
+            plan = "User-provided init solution."
+            agent.virtual_root.add_expected_child_count()
+            new_node = SearchNode(
+                plan=plan,
+                code=code,
+                parent=agent.virtual_root,
+                stage="draft",
+                local_best_node=agent.virtual_root,
+            )
+            register_node(agent, new_node, "User-provided init solution (no LLM).", new_branch=True)
+            logger.info(f"[draft] → node {new_node.id} (branch={new_node.branch_id}) [init_solution]")
+            return new_node
+
     professional_identity = (
         "🏆 You are a Kaggle Grandmaster - a top-tier ML expert competing to WIN.\n\n"
         "**Your Standards**:\n"
@@ -112,6 +135,8 @@ def run(agent) -> SearchNode:
 
             • **Option C**: Train from scratch / non-DL methods (only when pretraining provides no advantage).
 
+            **CRITICAL: When using any recommended pretrained model (Option A), you MUST copy the Code template EXACTLY as provided — including model variant names, file paths, and checkpoint filenames. Only the listed weights are available locally; other variants will fail to load.**
+
             **Key Techniques**:
             1. **Feature Extractor Pattern**: If dataset is small or domain mismatch exists → Freeze backbone + train only final layers (or feed to XGBoost/SVM).
 
@@ -137,7 +162,10 @@ def run(agent) -> SearchNode:
         memory_section = f"\n# Memory\nBelow is a record of previous solution attempts and their outcomes:\n {prompt['Memory']}\n"
 
     user_prompt = f"\n# Task description\n{prompt['Task description']}{memory_section}\n{instructions}"
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll examine the dataset:\n{agent.data_preview}"
+    assistant_prefix = f"Let me approach this systematically.\nFirst, I'll examine the dataset:\n{agent.data_preview}"
+    prompt_complete = build_chat_prompt_for_model(
+        agent.acfg.code.model, introduction, user_prompt, assistant_prefix
+    )
     agent.virtual_root.add_expected_child_count()
 
     if agent.use_stepwise_generation:

@@ -48,8 +48,11 @@ def dumps_json(obj: dataclasses_json.DataClassJsonMixin):
 
 
 def dump_json(obj: dataclasses_json.DataClassJsonMixin, path: Path):
-    with open(path, "w") as f:
-        f.write(dumps_json(obj))
+    tmp_path = path.with_suffix(".json.tmp")
+    data = dumps_json(obj)
+    with open(tmp_path, "w") as f:
+        f.write(data)
+    tmp_path.replace(path)
 
 
 G = TypeVar("G", bound=dataclasses_json.DataClassJsonMixin)

@@ -3,7 +3,7 @@
 import logging
 import random
 import time
-from typing import Callable, List, Dict
+from typing import Callable, List, Dict, Optional
 
 from engine.executor import ExecutionResult
 from engine.search_node import SearchNode, Journal
@@ -129,7 +129,13 @@ class AgentSearch:
     def is_root(self, node: SearchNode):
         return node.id is self.virtual_root.id
 
-    def _run_single_step(self, parent_node: SearchNode, exec_callback: ExecCallbackType, execute_immediately: bool = True):
+    def _run_single_step(
+        self,
+        parent_node: SearchNode,
+        exec_callback: ExecCallbackType,
+        execute_immediately: bool = True,
+        init_solution_path: Optional[str] = None,
+    ):
         """Run one search step: select action (draft/debug/improve), execute, parse, validate."""
         result_node = None
         _root = False
@@ -147,7 +153,7 @@ class AgentSearch:
                             logger.info("Aggregation failed or limit reached, skipping. Will continue normal search.")
                             result_node = None
                     else:
-                        result_node = draft_agent.run(self)
+                        result_node = draft_agent.run(self, init_solution_path=init_solution_path)
                         result_node.lock = True
                         logger.info(f"[_run_single_step] Draft node {result_node.id} is locked.")
                 elif parent_node.is_buggy or parent_node.is_valid is False:
@@ -183,13 +189,15 @@ class AgentSearch:
                     logger.warning(f"[_run_single_step] node {parent_node.id} is_buggy is None.")
 
                 if result_node:
-                    reviewed_code = code_review_agent.run(self, result_node)
-
-                    if reviewed_code.strip() != result_node.code.strip():
-                        logger.info(f"Node {result_node.id} code has been reviewed and modified")
-                        result_node.code = reviewed_code
+                    if init_solution_path:
+                        logger.info(f"Node {result_node.id} from init_solution, skipping code review")
                     else:
-                        logger.info(f"Node {result_node.id} passed code review without changes")
+                        reviewed_code = code_review_agent.run(self, result_node)
+                        if reviewed_code.strip() != result_node.code.strip():
+                            logger.info(f"Node {result_node.id} code has been reviewed and modified")
+                            result_node.code = reviewed_code
+                        else:
+                            logger.info(f"Node {result_node.id} passed code review without changes")
 
                     if not execute_immediately:
                         logger.info(f"Node {result_node.id} code generated and reviewed, execution deferred")
@@ -228,7 +236,13 @@ class AgentSearch:
             _root = True
         return _root, result_node
 
-    def step(self, node: SearchNode, exec_callback: ExecCallbackType, execute_immediately: bool = True) -> SearchNode:
+    def step(
+        self,
+        node: SearchNode,
+        exec_callback: ExecCallbackType,
+        execute_immediately: bool = True,
+        init_solution_path: Optional[str] = None,
+    ) -> SearchNode:
         if not self.journal.nodes or self.data_preview is None:
             self.update_data_preview()
             self.search_start_time = time.time()
@@ -236,7 +250,12 @@ class AgentSearch:
         if not node or node.stage == "root":
             node = node_selection.select_with_soft_switch(self)
 
-        _root, result_node = self._run_single_step(node, exec_callback=exec_callback, execute_immediately=execute_immediately)
+        _root, result_node = self._run_single_step(
+            node,
+            exec_callback=exec_callback,
+            execute_immediately=execute_immediately,
+            init_solution_path=init_solution_path,
+        )
 
         if result_node:
             metric_value = result_node.metric.value if result_node.metric else None

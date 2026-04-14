@@ -109,21 +109,22 @@ def _format_plan_text(planning_result: Dict[str, Any]) -> str:
     plans = planning_result.get("plan", {})
 
     text = f"## Improvement Analysis\n\n{planning_result.get('reason', 'Improve the solution')}\n\n"
-    text += f"## Target Components: {', '.join(modules_to_modify)}\n\n"
 
-    if plans and len(plans) > 0:
-        text += "## Detailed Enhancement Plans\n\n"
-        for module_name in modules_to_modify:
-            plan_detail = plans.get(module_name, "No plan provided")
-            text += f"**{module_name}:**\n{plan_detail}\n\n"
-    else:
-        text += "## Improvement Guidance\n\n"
-        text += (
-            f"Based on the analysis above, implement targeted improvements "
-            f"to the following components: {', '.join(modules_to_modify)}\n"
-            f"Focus on enhancing test set performance while preserving "
-            f"existing functionality and interfaces.\n\n"
-        )
+    if modules_to_modify:
+        text += f"## Target Components: {', '.join(modules_to_modify)}\n\n"
+        if plans and len(plans) > 0:
+            text += "## Detailed Enhancement Plans\n\n"
+            for module_name in modules_to_modify:
+                plan_detail = plans.get(module_name, "No plan provided")
+                text += f"**{module_name}:**\n{plan_detail}\n\n"
+        else:
+            text += (
+                f"## Improvement Guidance\n\n"
+                f"Based on the analysis above, implement targeted improvements "
+                f"to the following components: {', '.join(modules_to_modify)}\n"
+                f"Focus on enhancing test set performance while preserving "
+                f"existing functionality and interfaces.\n\n"
+            )
     return text
 
 
@@ -159,4 +160,10 @@ def _build_diff_model_prompt(
     user_prompt: str,
     assistant_text: str,
 ) -> Union[str, Dict[str, str]]:
-    return f"{introduction}\n\n{user_prompt}\n\n{assistant_text}"
+    if (model_name or "").lower().startswith("gemini"):
+        return f"{introduction}\n\n{user_prompt}\n\n{assistant_text}"
+    return {
+        "system": introduction,
+        "user": user_prompt,
+        "assistant": assistant_text,
+    }

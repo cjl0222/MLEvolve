@@ -16,6 +16,7 @@ import logging
 from typing import Dict, Any, Union
 
 from llm import generate, compile_prompt_to_md
+from llm.model_profiles import thinking_json_incompatible
 
 logger = logging.getLogger("MLEvolve")
 
@@ -65,7 +66,6 @@ PLANNING_JSON_SCHEMA = {
                 "title": "Modification Plan",
                 "description": "A detailed modification plan (2-5 sentences) as a string. Must include: 1) WHAT to change (specific technical modification with category), 2) WHY this change (root cause analysis, why THIS TASK needs it), 3) HOW to implement (specific implementation approach), 4) Interface constraints (variable names, function signatures to preserve). Maintain existing variable names to ensure compatibility with other components. This string must not be empty."
             },
-            "minProperties": 1,
             "required": []
         }
     },
@@ -91,12 +91,30 @@ def build_model_prompt(
     user_prompt: str,
     assistant_suffix: str,
 ):
-    """Build prompt format (plain text).
+    """Build prompt for model. Gemini: plain text. Qwen/OpenAI: chat dict {system, user, assistant}."""
+    if (model_name or "").lower().startswith("gemini"):
+        return f"{introduction}\n\n{user_prompt}\n\n{assistant_suffix}"
+    return {
+        "system": introduction,
+        "user": user_prompt,
+        "assistant": assistant_suffix,
+    }
 
-    Returns:
-        str
-    """
-    return f"{introduction}\n\n{user_prompt}\n\n{assistant_suffix}"
+
+def build_chat_prompt_for_model(
+    model_name: str,
+    introduction: str,
+    user_prompt: str,
+    assistant_prefix: str,
+):
+    """Build prompt for agents (draft/improve/fusion/etc). Gemini: plain text. Qwen/OpenAI: chat dict."""
+    if (model_name or "").lower().startswith("gemini"):
+        return f"{introduction}\n\n{user_prompt}\n\n{assistant_prefix}"
+    return {
+        "system": introduction,
+        "user": user_prompt,
+        "assistant": assistant_prefix,
+    }
 
 
 # ============ Response parser ============
@@ -326,7 +344,7 @@ def run_planner(
     for attempt in range(max_retries):
         logger.info(f"Calling {stage_name} Agent to analyze which modules to modify... (attempt {attempt + 1}/{max_retries})")
 
-        json_schema = PLANNING_JSON_SCHEMA if model_name else None
+        json_schema = PLANNING_JSON_SCHEMA
 
         planning_response = generate(
             prompt=planning_prompt_complete,
@@ -343,9 +361,18 @@ def run_planner(
             if attempt < max_retries - 1:
                 logger.info(f"Retrying {stage_name} Agent (JSON parsing failed)...")
                 continue
-            else:
-                logger.error(f"All {stage_name} attempts failed due to JSON parsing errors")
-                return planning_result
+            raw = planning_result.get("raw_response", "")
+            if raw and thinking_json_incompatible(agent_instance.acfg.code.model):
+                logger.warning("Qwen thinking mode: using raw response as fallback plan")
+                return {
+                    "reason": raw,
+                    "module": [],
+                    "plan": {},
+                    "parse_success": True,
+                    "raw_response": raw,
+                }
+            logger.error(f"All {stage_name} attempts failed due to JSON parsing errors")
+            return planning_result
 
         modules = planning_result.get("module", [])
         plans = planning_result.get("plan", {})
@@ -386,10 +413,20 @@ def run_planner(
                 continue
 
     logger.warning(f"❌ {stage_name} Agent failed after all retries, returning empty result (will trigger fallback)")
+    raw = planning_result.get("raw_response", "") if planning_result else ""
+    if raw and thinking_json_incompatible(agent_instance.acfg.code.model):
+        logger.warning(f"Qwen thinking mode: using raw response as fallback plan")
+        return {
+            "reason": raw,
+            "module": [],
+            "plan": {},
+            "parse_success": True,
+            "raw_response": raw,
+        }
     return {
         "reason": f"{stage_name} Agent failed after retries (invalid responses), falling back to full rewrite",
         "module": [],
         "plan": {},
         "parse_success": False,
-        "raw_response": planning_result.get("raw_response", "") if planning_result else "",
+        "raw_response": raw,
     }

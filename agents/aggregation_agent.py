@@ -4,6 +4,7 @@ from typing import Any, List, Optional
 from llm import compile_prompt_to_md
 from engine.search_node import SearchNode
 from agents.prompts import prompt_resp_fmt, get_impl_guideline_from_agent
+from agents.planner import build_chat_prompt_for_model
 from agents.coder import plan_and_code_query
 
 from engine.conditions import should_trigger_branch_fusion  # noqa: F401
@@ -168,7 +169,7 @@ def run(
         f"\n# Task description\n{prompt['Task description']}\n\n"
         f"# Branch Experiences\n{prompt['Branch Experiences']}\n\n{instructions}"
     )
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\n{assistant_prefix}"
+    prompt_complete = build_chat_prompt_for_model(agent.acfg.code.model, introduction, user_prompt, assistant_prefix)
 
     plan, code = plan_and_code_query(agent, prompt_complete)
 

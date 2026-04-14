@@ -11,6 +11,7 @@ from .base_planner import (  # noqa: F401
     run_planner,
     parse_planning_response,
     build_model_prompt,
+    build_chat_prompt_for_model,
     build_planner_task,
     build_planner_suffix,
     get_component_descriptions,

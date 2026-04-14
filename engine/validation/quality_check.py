@@ -216,6 +216,10 @@ def _validate_submission_with_retry(
     sample_path: Path | None = None,
 ) -> tuple[bool, dict]:
     """Validate submission with retries; optionally try format fix between attempts."""
+    if not getattr(cfg, "use_grading_server", True):
+        logger.info("Grading server disabled (use_grading_server=False); skipping format validation.")
+        return True, {"is_valid": True, "result": "Skipped (no grading server)."}
+
     status = False
     res = None
 

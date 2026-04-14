@@ -70,6 +70,7 @@ logs/
 
 # ===== Project Specific =====
 cache/
+scripts/
 workspace/
 workspaces/
 test_workspace/
@@ -81,7 +82,7 @@ test/
 test.py
 run_scripts/*.json
 eval/grade/*/private/*
-evaluate/*
+evaluate/
 grading_server.output
 CODE_ANALYSIS_REPORT.md
 PROMPT_COMPARISON_REPORT.md
