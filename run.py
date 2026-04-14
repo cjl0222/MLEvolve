@@ -20,7 +20,7 @@ import torch
 
 
 def run():
-    cfg = load_cfg()
+    cfg = load_cfg() #  读取config.yaml 可命令行覆盖
     if cfg.torch_hub_dir:
         torch.hub.set_dir(cfg.torch_hub_dir)
     set_global_seed(cfg.agent.seed)
@@ -29,19 +29,26 @@ def run():
 
     task_desc = load_task_desc(cfg)
 
+    #  在agent 开始探索之前，预先注入领域知识（模型列表、代码模板），让 agent 的第一步不是盲目乱猜，而是有方向地出发。
+    #  有 coldstart → 用知识库"预热"agent，缩短冷启动阶段的探索时间，提升初始代码质量；没有 coldstart → 直接空手起家，完全依赖 agent 的自我探索能力，可能需要更多的试错才能找到有效的解决方案。
     if cfg.coldstart.use_coldstart:
-        logger.info("Loading guidance from knowledge base")
+        logger.info("Loading guidance from knowledge base") # 包括模型描述和代码模板等，构建成文本形式的指导信息，供智能体在生成代码时参考
         cfg.coldstart.description = build_guidance_description(cfg)
         logger.info(f"Guidance description: {cfg.coldstart.description}")
 
-    with Status("Preparing agent workspace (copying and extracting files) ..."):
+    with Status("Preparing agent workspace (copying and extracting files) ..."): # 可视化组件 用于在终端显示动态状态指示器
+        # 复制和提取必要的文件到工作目录，确保智能体有一个干净、结构化的环境来进行代码生成和执行。这个步骤可能包括：
+        # 1. 创建工作目录结构（input、working、submission等子目录）
+        # 2. 从数据目录复制输入文件到工作目录的input子目录
+        # 3. 如果需要，进行数据预处理（例如解压缩、格式转换等），确保输入数据符合智能体的预期格式和要求。
+
         prep_agent_workspace(cfg)
 
     global_step = 0
 
     def cleanup():
         if global_step == 0:
-            shutil.rmtree(cfg.workspace_dir)
+            shutil.rmtree(cfg.workspace_dir) #   若未产生步骤则清理工作目录
 
     atexit.register(cleanup)
 
@@ -81,6 +88,7 @@ def run():
     lock = threading.Lock()
     completed = 0
 
+    # 配置项：initial_drafts（初始草稿数） 目标：快速生成 N 个不同的代码方案（仅生成，不执行）
     pending_draft_nodes = []
     if initial_draft_count > 0 and total_steps > 0:
         logger.info(f"📝 Phase 1: Sequential draft generation (code only, {initial_draft_count} drafts)")

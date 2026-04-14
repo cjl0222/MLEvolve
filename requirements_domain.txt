@@ -210,8 +210,8 @@ pathos==0.3.4
 pox==0.3.6
 ppft==1.7.7
 py4j==0.10.9.9
-umap==0.1.1
-umap-learn==0.5.9.post2
+# umap
+# umap-learn
 yacs==0.1.8
 alembic==1.15.1
 pymongo==4.11.2

@@ -11,11 +11,13 @@ from typing import Callable
 import backoff
 import jsonschema
 from dataclasses_json import DataClassJsonMixin
-from funcy import notnone, once, select_values
+from funcy import notnone, select_values
 from openai import OpenAI
 from config import Config
+import httpx
 
 logger = logging.getLogger("MLEvolve")
+
 
 # ---------------------------------------------------------------------------
 #  Type aliases
@@ -94,14 +96,14 @@ class FunctionSpec(DataClassJsonMixin):
 _client: OpenAI = None  # type: ignore
 
 
-@once
 def _setup_openai_client(cfg: Config):
     global _client
-    _client = OpenAI(
-        api_key=cfg.agent.code.api_key,
-        base_url=cfg.agent.code.base_url,
-        timeout=1200.0
-    )
+    if _client is None:
+        _client = OpenAI(
+            api_key=cfg.agent.code.api_key,
+            base_url=cfg.agent.code.base_url,
+            timeout=1200.0,
+        )
 
 
 def _convert_func_spec_to_openai_tool(func_spec: FunctionSpec):
@@ -117,7 +119,7 @@ def query(
     **model_kwargs,
 ) -> tuple[OutputType, float, int, int, dict]:
     _setup_openai_client(cfg)
-    filtered_kwargs: dict = select_values(notnone, model_kwargs)  # type: ignore
+    filtered_kwargs: dict = select_values(notnone, model_kwargs)  # type: ignore  过滤掉 model_kwargs 里值为 None 的参数，只保留有效参数传给模型调用
 
     # Build messages
     messages = []
@@ -144,8 +146,8 @@ def query(
         response = _client.chat.completions.create(
             model=filtered_kwargs.get("model"),
             messages=messages,
-            tools=tools,
-            tool_choice=tool_choice,
+            tools=tools,  # 工具列表
+            tool_choice=tool_choice,  # 必须使用这个工具
             temperature=filtered_kwargs.get("temperature", 1.0),
             max_tokens=filtered_kwargs.get("max_tokens", 16384),
             extra_body={

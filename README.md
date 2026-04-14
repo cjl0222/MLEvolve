@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <p align="center">
   <img src="assets/logo.svg" alt="MLEvolve" width="400"/>
 </p>

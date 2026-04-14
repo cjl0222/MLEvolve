@@ -2,7 +2,7 @@
 #  Data & paths
 # ============================================================
 data_dir: null
-dataset_dir: ""  # path to mle-bench dataset root, e.g. /data/mle-bench
+dataset_dir: "/home/zhangwh/.cache/mle-bench/data"  # path to mle-bench dataset root, e.g. /data/mle-bench
 desc_file: null
 goal: null
 eval: null
@@ -43,16 +43,52 @@ agent:
   data_preview: True
 
   # --- LLM models ---
+  # code:
+  #   model: glm-4.7-flash:latest
+  #   temp: 1
+  #   base_url: "http://127.0.0.1:11434/v1"   # Gemini API endpoint   glm-4.7-flash:latest   qwen3.5:35b-a3b
+  #   api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
+  # feedback:
+  #   model: glm-4.7-flash:latest
+  #   temp: 1
+  #   base_url: "http://127.0.0.1:11434/v1"   # Gemini API endpoint  https://anyrouter.top/   sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa
+  #   api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
+
+
   code:
-    model: gemini-3-pro-preview
+    model: Qwen/Qwen3.5-35B-A3B-GPTQ-Int4
     temp: 1
-    base_url: ""   # Gemini API endpoint
-    api_key: ""    # Gemini API key
+    base_url: "http://127.0.0.1:8000/v1"   # Gemini API endpoint   glm-4.7-flash:latest   qwen3.5:35b-a3b
+    api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
   feedback:
-    model: gemini-3-pro-preview
+    model: Qwen/Qwen3.5-35B-A3B-GPTQ-Int4
     temp: 1
-    base_url: ""   # Gemini API endpoint
-    api_key: ""    # Gemini API key
+    base_url: "http://127.0.0.1:8000/v1"   # Gemini API endpoint  https://anyrouter.top/   sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa
+    api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
+
+
+  # code:
+  #   model: gpt-5-codex
+  #   temp: 1
+  #   base_url: "https://anyrouter.top/v1"   # Gemini API endpoint
+  #   api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
+  # feedback:
+  #   model: gpt-5-codex
+  #   temp: 1
+  #   base_url: "https://anyrouter.top/v1"   # Gemini API endpoint
+  #   api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    # Gemini API key
+
+  # code:
+  #   model: gpt-4o
+  #   temp: 1
+  #   base_url: "https://api.gptgod.online/v1"   # Gemini API endpoint
+  #   api_key: "sk-u5tq1kX9n5oW2iILrR4GX6MnL6cK6Wj5BXktH1ffnmB7cIMz"    # Gemini API key
+  # feedback:
+  #   model: gpt-4o
+  #   temp: 1
+  #   base_url: "https://api.gptgod.online/v1"   # Gemini API endpoint
+  #   api_key: "sk-u5tq1kX9n5oW2iILrR4GX6MnL6cK6Wj5BXktH1ffnmB7cIMz"    # Gemini API key
+
 
   # --- Submission check ---
   check_data_leakage: True

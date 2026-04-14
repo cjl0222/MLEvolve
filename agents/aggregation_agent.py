@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import logging
 from typing import Any, List, Optional
 
@@ -185,3 +186,4 @@ def run(
 
     logger.info(f"[aggregation] → node {aggregation_node.id} (branch={aggregation_node.branch_id})")
     return aggregation_node
+>>>>>>> 27065ac2556e7b44dc8e8996e1de7ec51fb88af0
