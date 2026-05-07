@@ -17,6 +17,8 @@ code_files = {".py", ".sh", ".yaml", ".yml", ".md", ".html", ".xml", ".log", ".r
 # we treat these files as text (rather than binary) files
 plaintext_files = {".txt", ".csv", ".json", ".tsv"} | code_files
 
+# 这里是获取数据文件的元数据以及数据预览的工具函数，agent 会用它来生成对数据的理解和分析，帮助后续的代码实现和数据处理。
+# 它会递归地遍历输入目录下的文件，生成一个文本预览，包括文件结构、每个文件的大小（行数或字节数）以及一些 csv/json 文件的内容预览（如列信息、数据分布等）。
 
 def get_file_len_size(f: Path) -> tuple[int, str]:
     """
@@ -105,7 +107,7 @@ def preview_csv(p: Path, file_name: str, simple=True) -> str:
             elif df[col].nunique() < 10:
                 out.append(
                     f"{name} has {df[col].nunique()} unique values: {df[col].unique().tolist()}"
-                )
+                ) # 这个基本用不着
             elif is_numeric_dtype(df[col]):
                 out.append(
                     f"{name} has range: {df[col].min():.2f} - {df[col].max():.2f}, {nan_count} nan values"
@@ -134,15 +136,15 @@ def preview_json(p: Path, file_name: str):
             if second_line:
                 f.seek(0)  # so reset and read line by line
                 for line in f:
-                    builder.add_object(json.loads(line.strip()))
+                    builder.add_object(json.loads(line.strip()))  # JSONL（每行一个对象）	第二行非空	逐行 add_object()
             # if it is empty, then it's a single JSON object file
             else:
-                builder.add_object(first_object)
+                builder.add_object(first_object) # 单个 JSON 对象（紧凑）	第一行可解析，第二行为空	直接 add_object()
 
         except json.JSONDecodeError:
             # if first line isn't JSON, then it's prettified and we can read whole file
             f.seek(0)
-            builder.add_object(json.load(f))
+            builder.add_object(json.load(f)) # 单个 JSON 对象（格式化）	第一行解析失败	seek(0) 后整体 json.load()
 
     return f"-> {file_name} has auto-generated json schema:\n" + builder.to_json(
         indent=2
@@ -150,7 +152,17 @@ def preview_json(p: Path, file_name: str):
 
 
 def generate(base_path, include_file_details=True, simple=False):
-    """Generate a textual preview of a directory (structure + file previews)."""
+    """Generate a textual preview of a directory (structure + file previews).
+    为 agent 生成工作目录的数据快照——文件结构 + 关键文件内容预览，让 LLM 在生成代码前就能理解数据集的结构和特征。
+    
+    generate(base_path)
+    ├── file_tree(base_path)          生成目录树文本
+    ├── _walk(base_path)              递归遍历所有文件
+    │     ├── preview_csv()           csv 文件预览
+    │     ├── preview_json()          json 文件预览
+    │     └── get_file_len_size()     小文本文件（<30行）直接读取
+    └── [validation 数据策略提示]       检测到 val* 文件时追加
+    """
     tree = f"```\n{file_tree(base_path)}```"
     out = [tree]
 
@@ -159,11 +171,11 @@ def generate(base_path, include_file_details=True, simple=False):
             file_name = str(fn.relative_to(base_path))
 
             if fn.suffix == ".csv":
-                out.append(preview_csv(fn, file_name, simple=simple))
+                out.append(preview_csv(fn, file_name, simple=simple)) # 生成 CSV 文件的统计摘要，simple 参数控制详细程度
             elif fn.suffix == ".json":
                 out.append(preview_json(fn, file_name))
-            elif fn.suffix in plaintext_files:
-                if get_file_len_size(fn)[0] < 30:
+            elif fn.suffix in plaintext_files: # # 只有小文本文件才直接读取内容，大文件只展示结构和大小
+                if get_file_len_size(fn)[0] < 30:  
                     with open(fn) as f:
                         content = f.read()
                         if fn.suffix in code_files:
@@ -201,6 +213,7 @@ def generate(base_path, include_file_details=True, simple=False):
     result = "\n\n".join(out)
 
     # if the result is very long we generate a simpler version
+    # 结果 > 6000 字符 且 simple=False  →  递归调用 generate(..., simple=True)  结果 > 6000 字符 且 simple=True   →  截断到 6000 字符 + "... (truncated)"
     if len(result) > 6_000 and not simple:
         return generate(
             base_path, include_file_details=include_file_details, simple=True
@@ -266,7 +279,7 @@ def clean_task_desc(task_desc: str, cfg) -> str:
     for sample_path in sample_submission_paths:
         if os.path.exists(sample_path):
             try:
-                df = pd.read_csv(sample_path, nrows=5)
+                df = pd.read_csv(sample_path, nrows=5) # 读取前五行
                 submission_format = "\n\n" + "=" * 60 + "\n"
                 submission_format += "**REQUIRED SUBMISSION FORMAT**\n"
                 submission_format += "=" * 60 + "\n"

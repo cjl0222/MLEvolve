@@ -130,7 +130,9 @@ def validate_submission_content_quality(
     sample_path: Path | None = None,
     constant_threshold: float = 0.95,
 ) -> tuple[bool, str]:
-    """Local check for submission content quality (placeholder/constant filling). Returns (is_valid, error_message)."""
+    """Local check for submission content quality (placeholder/constant filling). Returns (is_valid, error_message).
+       主要检查“是不是在偷懒填占位值/常数预测
+    """
     import numpy as np
     try:
         submission_path = Path(submission_path)
@@ -149,11 +151,11 @@ def validate_submission_content_quality(
         df_sub = pd.read_csv(submission_path, dtype=str, keep_default_na=False)
         if sample_path is not None and Path(sample_path).exists():
             df_sample = pd.read_csv(sample_path, dtype=str, keep_default_na=False)
-            target_cols = df_sample.columns[1:]
+            target_cols = df_sample.columns[1:] # 若找到 sample submission：检查除第一列外的目标列（df_sample.columns[1:]）
         else:
             logger.info("No sample submission found, checking last column for constant values")
             if len(df_sub.columns) >= 2:
-                target_cols = [df_sub.columns[-1]]
+                target_cols = [df_sub.columns[-1]] # 则退化为检查最后一列
             else:
                 logger.warning("Submission has only 1 column, skipping content quality check")
                 return True, ""
@@ -163,12 +165,12 @@ def validate_submission_content_quality(
             values = df_sub[col].astype(str)
             # Skip all checks for binary classification columns (both 0 and 1 present)
             unique_vals = set(values.unique())
-            if unique_vals == {"0", "1"}:
+            if unique_vals == {"0", "1"}: # 若列是严格二分类 {0,1}，会跳过该列质量检查
                 logger.info(f"Column '{col}' is binary (0/1) — skipping quality check")
                 continue
             empty_mask = values.apply(lambda x: len(str(x).strip()) == 0)
             empty_ratio = empty_mask.sum() / len(values) if len(values) > 0 else 0
-            if empty_ratio > constant_threshold:
+            if empty_ratio > constant_threshold:  # 空值比例 > constant_threshold（默认 0.95）→ 失败
                 return False, (
                     f"Column '{col}' contains {empty_ratio*100:.1f}% empty values (threshold: {constant_threshold*100}%). "
                     f"The agent must generate real model predictions for all test samples, not leave them empty."
@@ -177,7 +179,7 @@ def validate_submission_content_quality(
                 value_counts = values.value_counts()
                 if len(value_counts) > 0:
                     most_common_ratio = value_counts.iloc[0] / len(values)
-                    if most_common_ratio > constant_threshold:
+                    if most_common_ratio > constant_threshold: # 单一值占比 > 0.95（且样本长度>2）→ 失败
                         most_common_value = value_counts.index[0]
                         return False, (
                             f"Column '{col}': {most_common_ratio*100:.1f}% of values are '{most_common_value}'. "
@@ -191,7 +193,7 @@ def validate_submission_content_quality(
                 r'^0(\s+0)+$': 'space-separated zeros',
                 r'^1(\s+1)+$': 'space-separated ones',
                 r'^\d+(\s+[01]\.0+)+(\s+[01])+$': 'placeholder like "14 1.0 0 0 1 1"',
-            }
+            } # 单一值占比 > 0.95（且样本长度>2）→ 失败
             for pattern, pattern_name in placeholder_patterns.items():
                 matches = values.str.match(pattern, na=False)
                 match_ratio = matches.sum() / len(values) if len(values) > 0 else 0
@@ -220,7 +222,7 @@ def _validate_submission_with_retry(
     res = None
 
     for attempt in range(max_attempts):
-        status, res = call_validate(exp_id=exp_id, submission_path=submission_path)
+        status, res = call_validate(exp_id=exp_id, submission_path=submission_path) # 发给本地验证服务
         if not status:
             return status, res
 
@@ -233,7 +235,8 @@ def _validate_submission_with_retry(
 
         if attempt == max_attempts - 1:
             break
-
+        # 若 is_valid=False，会尝试最多 max_attempts 次（这里传的是 2 次）
+        # 中间可能执行 try_fix_submission_format(...) 自动修表头，再重试
         fix_success = try_fix_submission_format(
             submission_path=submission_path,
             cfg=cfg,

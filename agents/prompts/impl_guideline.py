@@ -7,16 +7,16 @@ import humanize
 
 def get_impl_guideline_from_agent(agent):
     """Build implementation guideline from agent config."""
-    tot_time_remaining = agent.acfg.time_limit - (time.time() - agent.start_time)
-    exec_timeout = int(min(agent.cfg.exec.timeout, tot_time_remaining))
+    tot_time_remaining = agent.acfg.time_limit - (time.time() - agent.start_time) # 剩余时间
+    exec_timeout = int(min(agent.cfg.exec.timeout, tot_time_remaining)) # 单次执行超时，防止最后一步
     return get_impl_guideline(
-        tot_time_remaining=tot_time_remaining,
-        steps_remaining=agent.acfg.steps - agent.current_step,
-        exec_timeout=exec_timeout,
-        expose_prediction=getattr(agent.acfg, "expose_prediction", False),
-        k_fold_validation=getattr(agent.acfg, "k_fold_validation", 0),
-        pretrain_model_dir=getattr(agent.cfg, "pretrain_model_dir", ""),
-    )
+        tot_time_remaining=tot_time_remaining, # 剩余时间
+        steps_remaining=agent.acfg.steps - agent.current_step, # 剩余搜索步数
+        exec_timeout=exec_timeout, # 单次代码执行的超时上限，防止剩余时间不足时还按原超时跑
+        expose_prediction=getattr(agent.acfg, "expose_prediction", False), # 是否要求生成 predict() 函数
+        k_fold_validation=getattr(agent.acfg, "k_fold_validation", 0), # 是否要求 K 折交叉验证
+        pretrain_model_dir=getattr(agent.cfg, "pretrain_model_dir", ""), # 	离线预训练模型路径
+    ) # 1.prompt 里会告诉 LLM：Offline models at /data/pretrain_models，让它直接用本地路径加载模型  2. get_internet_clarification 会额外注入一条指令，告诉 LLM 该目录下的模型路径保证存在，可以直接用，不需要从网上下载
 
 
 def _format_time(time_in_sec):

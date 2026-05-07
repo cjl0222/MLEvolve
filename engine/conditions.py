@@ -42,7 +42,9 @@ def should_trigger_branch_fusion(agent) -> bool:
 
 
 def is_branch_stagnant(agent, branch_id: int, threshold: int = 3) -> bool:
-    """True if branch has no improvement over branch best for the last threshold attempts."""
+    """True if branch has no improvement over branch best for the last threshold attempts.
+    某个分支最近几次成功尝试，是否都没超过该分支历史最优分数。
+    """
     if branch_id not in agent.branch_successful_nodes:
         return False
 
@@ -57,13 +59,13 @@ def is_branch_stagnant(agent, branch_id: int, threshold: int = 3) -> bool:
         key=lambda n: n.metric.value if n.metric and n.metric.value is not None else (
             float('-inf') if maximize else float('inf')),
         reverse=maximize
-    )
+    ) # 按照分数排序，最大化时分数高的在前，最小化时分数低的在前
 
     branch_best_metric = sorted_nodes[0].metric.value
     if branch_best_metric is None:
         return False
 
-    consecutive_no_improvement = 0
+    consecutive_no_improvement = 0  # 连续无提升轮数 
     max_consecutive = threshold
 
     recent_nodes = successful_nodes[-max_consecutive:] if len(
@@ -73,7 +75,7 @@ def is_branch_stagnant(agent, branch_id: int, threshold: int = 3) -> bool:
         if node.metric and node.metric.value is not None:
             if maximize:
                 if node.metric.value >= branch_best_metric:
-                    break
+                    break  # 如果找到有更好分数的节点，停止计数
             else:
                 if node.metric.value <= branch_best_metric:
                     break

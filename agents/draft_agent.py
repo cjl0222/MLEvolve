@@ -140,7 +140,7 @@ def run(agent) -> SearchNode:
     prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll examine the dataset:\n{agent.data_preview}"
     agent.virtual_root.add_expected_child_count()
 
-    if agent.use_stepwise_generation:
+    if agent.use_stepwise_generation: # 4次1次LLM调用（3个步骤 + 1次合并）	分工协作，质量更高
         plan, code = stepwise_plan_and_code_query(
             agent_instance=agent,
             prompt_base=prompt,
@@ -150,8 +150,8 @@ def run(agent) -> SearchNode:
                 "memory": prompt.get("Memory", ""),
             },
         )
-    else:
-        plan, code = plan_and_code_query(agent, prompt_complete)
+    else: # 1次LLM调用	单次生成，简单快速
+        plan, code = plan_and_code_query(agent, prompt_complete) 
     new_node = SearchNode(plan=plan, code=code, parent=agent.virtual_root, stage="draft",
                         local_best_node=agent.virtual_root)
     register_node(agent, new_node, prompt_complete, new_branch=True)

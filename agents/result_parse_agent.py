@@ -223,16 +223,16 @@ def _validate_format_with_retry(agent, node: SearchNode):
         sample_path=None,
     )
 
-    if status:
-        if not res['is_valid']:
+    if status: # 表示“服务调用成功，有结构化结果”。
+        if not res['is_valid']: # 直接判失败，设置：
             logger.warning(f"[validate] node {node.id}: invalid after retry attempts.")
             node.is_valid = False
             node.is_buggy = True
             node._term_out.append(f"\n{res['result']}")
             node.analysis = f"FORMAT_ERROR: Execution succeeded but submission file failed format validation.\n\nDetails:\n{res['result']}"
         else:
-            _check_content_quality(agent, node, submission_path)
-    else:
+            _check_content_quality(agent, node, submission_path) # 进入内容质量检查
+    else: # 表示“验证服务调用异常/不可用”。
         logger.error(f"An unexpected error occurred: {res}, skip this stage.")
         logger.info(f"Node {node.id} format validation passed. Now checking content quality...")
         content_valid, content_error = validate_submission_content_quality(
@@ -382,12 +382,20 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
 
             node.absorb_exec_result(exec_result)
 
+         
+        
             introduction = _build_introduction(agent)
             prompt = {
                 "Introduction": introduction,
                 "Implementation": wrap_code(node.code),
                 "Execution output": wrap_code(node.term_out, lang=""),
             }
+            
+            
+            # 如果 plan 里有代码提取失败的信息（语法错误），注入到 prompt 里
+            # 让 LLM 能看到具体错误，写入 analysis，供 debug_agent 使用
+            if node.plan and node.plan.startswith("[CODE EXTRACTION FAILED]"):
+                prompt["Code extraction error"] = node.plan
 
             response = cast(
                 dict,
@@ -407,31 +415,39 @@ def run(agent, node: SearchNode, exec_result: ExecutionResult) -> SearchNode:
             response.setdefault("metric", None)
             response.setdefault("lower_is_better",
                                 not agent.metric_maximize if agent.metric_maximize is not None else False)
-
+            
+            # 先取模型返回的 metric 原值（可能是数字、字符串、None）。不是数字就强制置空。 
             metric_val = response.get("metric")
             if not isinstance(metric_val, (int, float)):
                 response["metric"] = None
-
+            
+            # 检查是否生成了提交文件，返回布尔值。
             has_csv_submission = _check_submission_file(agent, node)
-
+            # 把解析模型给出的文本总结写入节点分析字段。
             node.analysis = response["summary"]
+            # 从 response 里提取/保存代码摘要（用于 memory/后续提示）。
             _save_code_summary(agent, node, response)
+            # 综合判定 node.is_buggy。
+            # 依据包括：response["is_bug"]、exc_type、metric 是否为空、是否有 submission。这是关键状态更新点。
             _determine_buggy(node, response, has_csv_submission)
 
-            if not node.is_buggy:
+            if not node.is_buggy: # 仅当暂时不 buggy 时，做提交格式/内容质量校验；这一步可能把节点改成 buggy，并设置 is_valid=False。
+                # TODO 修改：先看 submission_{node.id}.csv 是否符合竞赛格式（列名、结构等）；再做内容质量检查，防止“全常数/占位预测”。
                 _validate_format_with_retry(agent, node)
 
-            if node.is_buggy:
+            if node.is_buggy: # 若 buggy：直接把 metric 打到最差值（惩罚）。
                 node.metric = WorstMetricValue()
-            else:
+            else: # 若不 buggy：继续做方向一致性校验（maximize/minimize）和数据泄漏检查，这两步也可能把节点改成 buggy。
+                # 检查 parser 返回的 lower_is_better 是否和系统预设一致；不一致就判 buggy，并把 metric 置最差，防止把分数方向搞反。
                 _validate_metric_direction(agent, node, response)
+                # 调用 data_leakage_agent 做判断；若“存在泄露且置信度中高”，就判 buggy、metric 置最差，并写明原因。
                 _check_data_leakage(agent, node, response)
 
-            status = "FAIL" if node.is_buggy else "PASS"
+            status = "FAIL" if node.is_buggy else "PASS" # 记录日志：PASS/FAIL + 最终 metric。
             metric_val = node.metric.value if node.metric else None
             logger.info(f"[parse] node {node.id}: {status} | metric={metric_val}")
 
-            _save_to_global_memory(agent, node)
+            _save_to_global_memory(agent, node) # 仅在满足条件时写入全局记忆（通常是非 buggy 且有有效 metric）。
 
             return node
         except Exception as e:

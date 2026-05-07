@@ -18,14 +18,14 @@ logger = logging.getLogger("MLEvolve")
 
 
 def _get_fusion_candidates(agent, parent_node: SearchNode) -> List[SearchNode]:
-    candidates = []
+    candidates = [] # 优先做的是跨分支借鉴，而不是在自己分支里重复改。
 
-    for branch_id in agent.branch_successful_nodes.keys():
+    for branch_id in agent.branch_successful_nodes.keys(): # 遍历 agent.branch_successful_nodes 里其他分支的成功节点；
         if branch_id != parent_node.branch_id:
             branch_candidates = solution_manager.get_branch_top_nodes(agent,branch_id, top_k=2)
             candidates.extend(branch_candidates)
 
-    if not candidates:
+    if not candidates: # 如果别的分支一个都没有，就退回当前分支的 top 节点（排除自己）。
         current_branch_candidates = solution_manager.get_branch_top_nodes(agent,parent_node.branch_id, top_k=2)
         candidates = [node for node in current_branch_candidates if node.id != parent_node.id]
 
@@ -34,6 +34,7 @@ def _get_fusion_candidates(agent, parent_node: SearchNode) -> List[SearchNode]:
 
 
 def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> SearchNode:
+    # 需要改提示词
     introduction = (
         "You are a Kaggle grandmaster attending a competition. "
         "You are provided with a successful reference solution from another approach below. "
@@ -139,7 +140,7 @@ def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> S
     if agent.acfg.use_diff_mode:
         try:
             logger.info(f"Using diff fusion for node {source_node.id} with reference {target_node.id}")
-            plan, code = _diff_fusion(agent, prompt, agent.data_preview, source_node)
+            plan, code = _diff_fusion(agent, prompt, agent.data_preview, source_node)  # 区别就在这里
         except Exception as e:
             logger.warning(f"Diff fusion failed: {e}, falling back to full fusion")
             plan, code = plan_and_code_query(agent, prompt_complete)
@@ -307,24 +308,25 @@ def _fuse_with_multiple_references(
 
 
 def run(agent, parent_node: SearchNode) -> SearchNode:
-    candidates = _get_fusion_candidates(agent, parent_node)
+    # 优先找别的分支里已经表现好的解来“融合”当前解；找不到就退回普通 improve。
+    candidates = _get_fusion_candidates(agent, parent_node) # 1.找融合候选
 
-    if not candidates:
+    if not candidates: # 没有候选就普通improve
         logger.info(f"No fusion candidates found for node {parent_node.id}, falling back to normal improve")
-        return run_improve(agent, parent_node)
+        return run_improve(agent, parent_node) 
 
-    if len(candidates) == 1:
-        fused_node = fuse_two_nodes(agent, parent_node, candidates[0])
+    if len(candidates) == 1: # 只有 1 个候选 把当前节点和这 1 个参考节点融合
+        fused_node = fuse_two_nodes(agent, parent_node, candidates[0]) 
         parent_node.add_expected_child_count()
         return fused_node
 
-    elif len(candidates) <= 5:
+    elif len(candidates) <= 5: # 有 2~5 个候选 把当前节点和这些参考节点一起融合（多参考融合）让模型参考多个成功解。
         fused_node = _fuse_with_multiple_references(agent, parent_node, candidates)
-        parent_node.add_expected_child_count()
+        parent_node.add_expected_child_count() # 每次创建新子节点后 表示“这个父节点又预定了一个子节点”，防止并发/预算控制出错。 
         return fused_node
 
-    else:
-        top_5_candidates = candidates[:5]
+    else:  # 超过 5 个
+        top_5_candidates = candidates[:5] # 只取前 5 个，避免 prompt 太长、噪声太多。
         fused_node = _fuse_with_multiple_references(agent, parent_node, top_5_candidates)
         parent_node.add_expected_child_count()
         return fused_node
@@ -494,5 +496,5 @@ def _diff_multi_fusion(agent, prompt_base, data_preview, parent_node):
         data_preview=data_preview,
         execution_output="",
         introduction=_MULTI_FUSION_DIFF_INTRODUCTION,
-        extra_context=extra_context,
+        extra_context=extra_context, # 参考解的内容也作为 diff coder 的输入，让它更好地理解为什么要改、改哪里、改什么
     )

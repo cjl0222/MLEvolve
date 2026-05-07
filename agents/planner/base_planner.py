@@ -102,31 +102,32 @@ def build_model_prompt(
 # ============ Response parser ============
 
 def parse_planning_response(response: Union[str, dict]) -> Dict[str, Any]:
+    # 把 planner 的返回结果（可能是 dict，也可能是字符串）尽可能解析成标准结构化结果，并且在失败时返回可恢复的兜底格式，而不是直接抛异常。
     if isinstance(response, dict):
         result = response.copy()
-        _normalize_planning_result(result)
+        _normalize_planning_result(result) # 做字段标准化
         result["parse_success"] = True
         result["raw_response"] = str(response)
         return result
 
     response_text = response if isinstance(response, str) else str(response)
 
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL) # 优先匹配 fenced code block 里的 JSON     (?:json)?：json 标签可有可无  (\{.*?\})：抓取最内层对象文本（非贪婪   re.DOTALL：让 . 可跨行
     if json_match:
         json_str = json_match.group(1)
     else:
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL) #  如果没有 fenced block，再找任意大括号对象
         if json_match:
-            json_str = json_match.group(0)
+            json_str = json_match.group(0) # 这是宽松兜底：在整段文本中抓一段 { ... }。 这里 .* 是贪婪的，可能吞到最后一个 }，但后面 raw_decode 会再做语法判定。
         else:
-            json_str = response_text.strip()
+            json_str = response_text.strip() # 再不行就整段文本当 JSON 候选 
 
     try:
-        json_str_cleaned = _clean_json_control_chars(json_str)
+        json_str_cleaned = _clean_json_control_chars(json_str) # 先清洗掉控制字符，避免它们导致 JSON 解析失败。只处理字符串内的控制字符，保留 JSON 结构。
         decoder = json.JSONDecoder()
-        result, idx = decoder.raw_decode(json_str_cleaned.lstrip())
+        result, idx = decoder.raw_decode(json_str_cleaned.lstrip()) # raw_decode 可以从字符串开头解析一个 JSON 值并返回结束下标 idx。  适合“前面提取得不完全精准”的场景（例如后面还有尾巴文本）。 
 
-        if not isinstance(result, dict):
+        if not isinstance(result, dict): # 补齐并修正规范字段
             raise ValueError("Response is not a JSON object")
 
         _normalize_planning_result(result)
@@ -158,7 +159,7 @@ def _normalize_planning_result(result: Dict[str, Any]) -> None:
     if "plan" not in result:
         result["plan"] = {}
 
-    if not isinstance(result["module"], list):
+    if not isinstance(result["module"], list): # 强制 module 是列表
         logger.warning("'module' is not a list, converting to list")
         result["module"] = [result["module"]] if result["module"] else []
 
@@ -177,7 +178,7 @@ def _normalize_planning_result(result: Dict[str, Any]) -> None:
         if plan_text:
             reason = (result.get("reason") or "").strip()
             result["reason"] = (reason + "\n\n" + plan_text).strip() if reason else plan_text
-            result["plan"] = {m: plan_text for m in (result.get("module") or [])} if result.get("module") else {}
+            result["plan"] = {m: plan_text for m in (result.get("module") or [])} if result.get("module") else {}  #  即每个模块都映射同一段计划文本。
         else:
             result["plan"] = {}
     else:
@@ -191,16 +192,17 @@ def _normalize_planning_result(result: Dict[str, Any]) -> None:
 
 
 def _clean_json_control_chars(json_text: str) -> str:
+    # 在不破坏 JSON 结构的前提下，清理 JSON 字符串值里的非法控制字符，让 json.loads/raw_decode 更容易成功
     def replace_control_in_string(match):
         string_content = match.group(1)
         cleaned = string_content
-        cleaned = re.sub(r'(?<!\\)\n', r'\\n', cleaned)
-        cleaned = re.sub(r'(?<!\\)\t', r'\\t', cleaned)
-        cleaned = re.sub(r'(?<!\\)\r', r'\\r', cleaned)
-        cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', cleaned)
+        cleaned = re.sub(r'(?<!\\)\n', r'\\n', cleaned) # 未转义换行 -> \\n
+        cleaned = re.sub(r'(?<!\\)\t', r'\\t', cleaned) # 未转义 tab -> \\t
+        cleaned = re.sub(r'(?<!\\)\r', r'\\r', cleaned) # 未转义回车 -> \\r
+        cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', cleaned) # 删除其他不可见控制字符
         return f'"{cleaned}"'
 
-    pattern = r'"((?:[^"\\]|\\.)*)"'
+    pattern = r'"((?:[^"\\]|\\.)*)"' # 匹配 JSON 字符串值，捕获内容（支持转义）
     return re.sub(pattern, replace_control_in_string, json_text)
 
 
@@ -261,7 +263,7 @@ def run_planner(
     max_retries: int = 3,
     stage_name: str = "Planning",
 ) -> Dict[str, Any]:
-    component_descriptions = get_component_descriptions()
+    component_descriptions = get_component_descriptions() # 数据集处理、模型设计、训练评估等模块的描述
     component_desc_parts = [f"- **{name}**: {desc}" for name, desc in component_descriptions.items()]
     component_desc_text = "\n".join(component_desc_parts)
 
@@ -333,7 +335,7 @@ def run_planner(
             temperature=agent_instance.acfg.code.temp,
             cfg=agent_instance.cfg,
             json_schema=json_schema,
-        )
+        )  # TODO  要修改OpenAI格式，以支持json_schema或json_object
 
         planning_result = parse_planning_response(planning_response)
         parse_success = planning_result.get("parse_success", True)
@@ -349,7 +351,7 @@ def run_planner(
 
         modules = planning_result.get("module", [])
         plans = planning_result.get("plan", {})
-        has_plan = isinstance(plans, dict) and len(plans) > 0
+        has_plan = isinstance(plans, dict) and len(plans) > 0  # 每个模块都必须有对应的计划文本，才算真正有 plan
 
         if len(modules) > 0:
             if len(plans) == 0:
@@ -366,11 +368,11 @@ def run_planner(
 
             logger.info(f"✅ {stage_name} Result: {planning_result['reason']}")
             logger.info(f"Modules to modify: {modules}")
-            if plans:
+            if plans: # 即使计划不完整（缺少某些模块的计划文本），也先把现有的计划文本记录下来，方便后续分析和调试。 但如果完全没有计划文本，就让它重试。
                 logger.info(f"Plans provided for: {list(plans.keys())}")
             return planning_result
 
-        elif has_plan:
+        elif has_plan:  
             plan_modules = list(plans.keys())
             logger.info(f"{stage_name}: No modules in 'module' field, but found {len(plan_modules)} modules in 'plan': {plan_modules}")
             planning_result["module"] = plan_modules

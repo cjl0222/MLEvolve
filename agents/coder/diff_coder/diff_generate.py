@@ -32,11 +32,15 @@ def diff_generate_and_apply(
     data_preview: str,
     execution_output: str,
     introduction: str,
-    extra_context: str = "",
-    extra_user_sections: str = "",
-    learning_guidance: str = "",
-    max_diff_retries: int = 3,
+    extra_context: str = "",   # 额外上下文（比如参考解信息）
+    extra_user_sections: str = "", # 额外 user prompt 片段
+    learning_guidance: str = "",  # : 给 diff 指令增加特定导向
+    max_diff_retries: int = 3, #  补丁应用失败后的最大重试次数（默认3）
 ) -> Tuple[str, str]:
+    '''
+    给它“规划结果 + 旧代码 +上下文”，它会让 LLM 产出 SEARCH/REPLACE 补丁，自动尝试应用和重试，最后返回 (plan_str, final_code)。
+    diff_generate_and_apply 是“规划到代码”的执行桥梁，核心价值在于 LLM 生成 diff + 自动应用 + 带上下文重试 + 最终保底返回。
+    '''
     model_name = agent_instance.acfg.code.model
 
     plan_text = _format_plan_text(planning_result)
@@ -92,14 +96,14 @@ def diff_generate_and_apply(
         regenerate_fn=regenerate_fn,
     )
 
-    plan_str = format_planning_result_for_plan(planning_result)
+    plan_str = format_planning_result_for_plan(planning_result) # 于节点里存档 plan 字段。
 
     if final_code:
         logger.info(f"Diff completed: applied {total_applied} patch(es)")
         return plan_str, final_code
     else:
         logger.warning("All diff attempts failed, returning original code")
-        return plan_str, parent_code
+        return plan_str, parent_code  # 
 
 
 # ============ Internal helpers ============
