@@ -12,6 +12,7 @@ from agents.prompts import (
 )
 
 from agents.coder.diff_coder import SearchReplacePatcher, DIFF_SYS_FORMAT
+from agents.planner import build_chat_prompt_for_model
 from agents.triggers import register_node
 
 logger = logging.getLogger("MLEvolve")
@@ -148,7 +149,8 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
     def build_prompt_complete(instructions_with_format, use_full_code_requirement=False):
         current_introduction = introduction_base + (full_code_requirement if use_full_code_requirement else "")
         user_prompt = f"\n# Task description\n{prompt['Task description']}\n{instructions_with_format}"
-        return f"{current_introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe code that needs fixing:\n{prompt['Previous (buggy) implementation']}\nThe error/issue encountered:\n{prompt['Execution output']}\nAnalyzing the root cause: {parent_node.analysis}\nI'll now fix this issue."
+        assistant_prefix = f"Let me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe code that needs fixing:\n{prompt['Previous (buggy) implementation']}\nThe error/issue encountered:\n{prompt['Execution output']}\nAnalyzing the root cause: {parent_node.analysis}\nI'll now fix this issue."
+        return build_chat_prompt_for_model(agent.acfg.code.model, current_introduction, user_prompt, assistant_prefix)
 
     parent_node.add_expected_child_count()
 

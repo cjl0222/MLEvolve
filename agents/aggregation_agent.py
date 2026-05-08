@@ -4,11 +4,13 @@ from typing import Any, List, Optional
 from llm import compile_prompt_to_md
 from engine.search_node import SearchNode
 from agents.prompts import prompt_resp_fmt, get_impl_guideline_from_agent
+from agents.planner import build_chat_prompt_for_model
 from agents.coder import plan_and_code_query
 
 from engine.conditions import should_trigger_branch_fusion  # noqa: F401
 from agents.triggers import register_node
 from utils.metric import WorstMetricValue
+
 logger = logging.getLogger("MLEvolve")
 
 
@@ -21,18 +23,18 @@ def _collect_branch_representatives(agent) -> List[SearchNode]:
             logger.debug(f"Branch {branch_id} has no successful nodes, skipping")
             continue
 
-        maximize = agent.metric_maximize if agent.metric_maximize is not None else True # 。None 时默认 True（越大越好）。
+        maximize = agent.metric_maximize if agent.metric_maximize is not None else True # None 时默认 True（越大越好）。
         # branch_best = max(
         #     successful_nodes,
         #     key=lambda n: n.metric.value if n.metric and n.metric.value is not None else (
         #         float("-inf") if maximize else float("inf")
         #     ),
         # )
+        # 修复metric对象比较
         branch_best = max(
             successful_nodes,
             key=lambda n: n.metric if n.metric is not None and n.metric.value is not None else WorstMetricValue(),
         )
-        
 
         if not branch_best.metric or branch_best.metric.value is None:
             logger.debug(f"Branch {branch_id} best node has no valid metric, skipping")
@@ -46,12 +48,12 @@ def _collect_branch_representatives(agent) -> List[SearchNode]:
     #         float("-inf") if maximize else float("inf")
     #     ),
     #     reverse=maximize,
-    # ) # 把所有分支的代表节点按 metric 全局排序： 排序后，LLM 在 prompt 里会先看到最优分支，有助于它优先学习最成功的方案。
+    # ) 把所有分支的代表节点按 metric 全局排序： 排序后，LLM 在 prompt 里会先看到最优分支，有助于它优先学习最成功的方案。
     representatives.sort(
         key=lambda n: n.metric if n.metric is not None and n.metric.value is not None else WorstMetricValue(),
         reverse=True,
     )
-    
+
     logger.info(
         f"Collected {len(representatives)} branch representatives "
         f"from {len(agent.branch_successful_nodes)} successful solutions" # 记录"从 N 个分支中收集到 M 个代表"。注意日志里写的是 successful solutions 但实际是 branch_successful_nodes 的分支数，措辞略有歧义。
@@ -70,15 +72,15 @@ def run(
         logger.error(
             f"_aggregation() should only be called from root node! Got parent_node: {parent_node.id}"
         )
-        return None   # 只能从根节点触发
+        return None  # 只能从根节点触发
 
     if agent.fusion_draft_count >= agent.max_fusion_drafts:
         logger.info(
             f"Max fusion drafts ({agent.max_fusion_drafts}) reached, skipping aggregation"
         )
-        return None   # 只能从根节点触发 限制 fusion 总次数，防止无限融合
+        return None  # 只能从根节点触发 限制 fusion 总次数，防止无限融合
 
-    branch_representatives = _collect_branch_representatives(agent) # 每个分支只取历史最优节点作为代表，然后按 metric 排序。至少需要 2 个分支才能做融合（单分支没有"融合"的意义）。
+    branch_representatives = _collect_branch_representatives(agent) # # 每个分支只取历史最优节点作为代表，然后按 metric 排序。至少需要 2 个分支才能做融合（单分支没有"融合"的意义）。
     if len(branch_representatives) < 2:
         logger.info("Not enough successful branches for aggregation")
         return None
@@ -92,7 +94,7 @@ def run(
     )
 
     reference_summaries = []
-    if mode == "node": # Node 模式（默认）：给 LLM 看每个分支最终最优节点的信息  LLM 看到的是"结果"，从成功方案中提炼共性   Node 模式强调"合并最终技术" 
+    if mode == "node": # # Node 模式（默认）：给 LLM 看每个分支最终最优节点的信息  LLM 看到的是"结果"，从成功方案中提炼共性   Node 模式强调"合并最终技术" 
         for i, node in enumerate(branch_representatives):
             trajectory = node.generate_node_trajectory(need_code=False)
             branch_id = node.branch_id if hasattr(node, "branch_id") else i + 1
@@ -130,7 +132,7 @@ def run(
         "Instructions": {},
     }
 
-    prompt["Instructions"] |= prompt_resp_fmt() # 响应格式
+    prompt["Instructions"] |= prompt_resp_fmt()  # 响应格式
 
     if mode == "node":
         prompt["Instructions"] |= {
@@ -179,14 +181,14 @@ def run(
         f"\n# Task description\n{prompt['Task description']}\n\n"
         f"# Branch Experiences\n{prompt['Branch Experiences']}\n\n{instructions}"
     )
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\n{assistant_prefix}" # 不是真正的 prefill
+    prompt_complete = build_chat_prompt_for_model(agent.acfg.code.model, introduction, user_prompt, assistant_prefix) # # 不是真正的 prefill
 
     plan, code = plan_and_code_query(agent, prompt_complete) # 修改了部分内容
 
     aggregation_node = SearchNode(
         plan=plan,
         code=code,
-        parent=agent.virtual_root, # # 挂在根节点下，是一条新分支的起点
+        parent=agent.virtual_root, # 挂在根节点下，是一条新分支的起点
         stage="fusion_draft",
         local_best_node=agent.virtual_root, # 初始化局部最优为根节点，表示这条新分支还没有自己的最优节点
     )

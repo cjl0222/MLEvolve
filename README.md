@@ -8,6 +8,7 @@ An agentic MLE (Machine Learning Engineering) system that automatically solves K
 
 ## Timeline
 
+- **2026-03-23** — Now supports OpenAI-compatible APIs (GPT, Qwen, DeepSeek, etc.). Models with function calling support are recommended for best performance.
 - **2026-02-14** — MLEvolve codebase is now open-source.
 - **2026-02-14** — MLEvolve achieves **#1 on MLE-bench** (12-hour budget).
 
@@ -59,14 +60,16 @@ dataset_dir: "/path/to/mle-bench/data"
 
 agent:
   code:
-    base_url: "https://api.openai.com/v1"  # or your OpenAI-compatible endpoint
+    base_url: "https://your-gemini-endpoint"
     api_key: "your-api-key"
   feedback:
-    base_url: "https://api.openai.com/v1"  # or your OpenAI-compatible endpoint
+    base_url: "https://your-gemini-endpoint"
     api_key: "your-api-key"
 ```
 
 Other tunable fields (`agent.steps`, `agent.time_limit`, etc.) have sensible defaults — see comments in the yaml file.
+
+If `agent.use_global_memory: True`, you must also set `agent.memory_embedding_model_path` to a valid HuggingFace embedding model name or local model path. Set `agent.memory_embedding_device` to `cpu` if CUDA is unavailable.
 
 ### Cold-Start Models (optional)
 
@@ -106,20 +109,3 @@ If you find this repo useful, you can also cite our earlier work.
   year={2026}
 }
 ```
-
-1、取消代理
-unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy
-
-2、开启模型(vllm或ollama)
-（1）开启ollama：略
-（2）开启vllm：  
-    conda activate vllm-mlevolve
-    export CUDA_VISIBLE_DEVICES=0,1 
-    vllm serve Qwen/Qwen3.5-35B-A3B-GPTQ-Int4 --port 8000 --tensor-parallel-size 2 --max-model-len  32768  --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --quantization moe_wna16 --gpu-memory-utilization 0.85
-（3）配置模型baseURL
-
-3、运行项目
-conda activate mlevolve
-bash run_single_task.sh nomad2018-predict-transparent-conductors /home/zhangwh/.cache/mle-bench/data 1
-
-

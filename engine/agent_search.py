@@ -129,7 +129,13 @@ class AgentSearch:
     def is_root(self, node: SearchNode):
         return node.id is self.virtual_root.id
 
-    def _run_single_step(self, parent_node: SearchNode, exec_callback: ExecCallbackType, execute_immediately: bool = True):
+    def _run_single_step(
+        self,
+        parent_node: SearchNode,
+        exec_callback: ExecCallbackType,
+        execute_immediately: bool = True,
+        init_solution_path: Optional[str] = None,
+    ):
         """Run one search step: select action (draft/debug/improve), execute, parse, validate.
         整个系统最核心的函数，一次完整的"生成代码 → 执行 → 评估"闭环都在这里完成。
         
@@ -151,7 +157,7 @@ class AgentSearch:
                             logger.info("Aggregation failed or limit reached, skipping. Will continue normal search.")
                             result_node = None
                     else:
-                        result_node = draft_agent.run(self) # 从零生成初始方案
+                        result_node = draft_agent.run(self, init_solution_path=init_solution_path)# 从零生成初始方案
                         result_node.lock = True
                         logger.info(f"[_run_single_step] Draft node {result_node.id} is locked.")
                 elif parent_node.is_buggy or parent_node.is_valid is False: # is_buggy=True 表示执行报错；is_valid=False 表示代码结构不合法。
@@ -197,13 +203,15 @@ class AgentSearch:
                     logger.warning(f"[_run_single_step] node {parent_node.id} is_buggy is None.")
 
                 if result_node: # 代码审查和执行放在同一个 if 里，意思是：无论是 draft/debug/improve/evolution/fusion 哪个策略生成了新节点，都要经过代码审查；如果没有生成新节点（result_node=None），就直接跳过审查和执行，回到上层重新选节点。
-                    reviewed_code = code_review_agent.run(self, result_node)
-
-                    if reviewed_code.strip() != result_node.code.strip():
-                        logger.info(f"Node {result_node.id} code has been reviewed and modified")
-                        result_node.code = reviewed_code
+                    if init_solution_path:
+                        logger.info(f"Node {result_node.id} from init_solution, skipping code review")
                     else:
-                        logger.info(f"Node {result_node.id} passed code review without changes")
+                        reviewed_code = code_review_agent.run(self, result_node)
+                        if reviewed_code.strip() != result_node.code.strip():
+                            logger.info(f"Node {result_node.id} code has been reviewed and modified")
+                            result_node.code = reviewed_code
+                        else:
+                            logger.info(f"Node {result_node.id} passed code review without changes")
 
                     if not execute_immediately: # 如果 execute_immediately=False，表示只生成代码但不执行，
                         logger.info(f"Node {result_node.id} code generated and reviewed, execution deferred")
@@ -242,7 +250,13 @@ class AgentSearch:
             _root = True
         return _root, result_node
 
-    def step(self, node: SearchNode, exec_callback: ExecCallbackType, execute_immediately: bool = True) -> SearchNode:
+    def step(
+        self,
+        node: SearchNode,
+        exec_callback: ExecCallbackType,
+        execute_immediately: bool = True,
+        init_solution_path: Optional[str] = None,
+    ) -> SearchNode:
         """
         step 函数有两种调用模式：
 
@@ -273,13 +287,17 @@ class AgentSearch:
         # 如果传入的是根节点或空节点，则调用 select_with_soft_switch 自动选一个父节点。这支持两种调用方式： 外部指定节点（异步/并发模式）自动选节点（单线程顺序搜索） 
         if not node or node.stage == "root": # 本质是区分"外部指定节点"和"自主选节点"两种工作模式
             node = node_selection.select_with_soft_switch(self)
-        
+
         # 执行核心逻辑：生成/改进代码 → 代码审查 → 执行 → 结果解析 → 评估 → 更新日志和最佳解
         #  会根据父节点状态选择策略 （draft/debug/improve/evolution/fusion），并在生成代码后进行代码审查，最后执行并解析结果。执行可以选择立即执行或延后执行（生成代码但不运行）。
         # root 是布尔标志，表示此步是否"回到根"（终端节点或需要重新选择）。 终端节点 = 这条路已经走到头了，继续展开也没意义。_run_single_step 里检测到 is_terminal 时直接反向传播奖励 0，不再生成子节点
         # _root = True  →  这个节点触发了反向传播（分支已结束或失败） _root = False →  节点有改进潜力，继续在这条分支上展开
-        _root, result_node = self._run_single_step(node, exec_callback=exec_callback, execute_immediately=execute_immediately)
-        
+        _root, result_node = self._run_single_step(
+            node,
+            exec_callback=exec_callback,
+            execute_immediately=execute_immediately,
+            init_solution_path=init_solution_path,
+        )
         # 更新最优解
         if result_node:
             metric_value = result_node.metric.value if result_node.metric else None
@@ -293,7 +311,7 @@ class AgentSearch:
         # 记录当前步数、总节点数、分支数、当前最优值，便于监控搜索进展。
         self.current_step = len(self.journal)
 
-        # Cumulative stats 
+        # Cumulative stats
         total_nodes = len(self.journal)
         n_branches = len(self.branch_all_nodes)
         best_val = self.best_node.metric.value if (self.best_node and self.best_node.metric) else None
@@ -303,7 +321,7 @@ class AgentSearch:
         if _root or result_node is None:
             return self.virtual_root # 让上层重新选节点，如果返回 virtual_root → 自动触发 select_with_soft_switch 重新选节点 virtual_root 是构造函数里创建的一个占位符节点（stage="root"），它不是真正的解决方案节点，只是一个"没有指定节点"的信号。
         else:
-            return result_node # # 返回新生成的节点  返回值决定下一轮 step 的输入，下次继续从这个节点展开（同一分支深入）。返回 virtual_root 意味着"本步没有产出，请重新选节点"；返回 result_node 则可继续在该节点上深入搜索。
+            return result_node # 返回新生成的节点  返回值决定下一轮 step 的输入，下次继续从这个节点展开（同一分支深入）。返回 virtual_root 意味着"本步没有产出，请重新选节点"；返回 result_node 则可继续在该节点上深入搜索。
 
     def execute_deferred_node(self, node: SearchNode, exec_callback: ExecCallbackType) -> SearchNode:
         """Execute a node that was generated and reviewed but not yet run (pending_execution=True)."""

@@ -15,7 +15,7 @@ from agents.prompts import (
     get_impl_guideline_from_agent,
 )
 from agents.improve_agent import run as run_improve
-from agents.planner import run_planner, build_planner_task, build_planner_suffix
+from agents.planner import run_planner, build_planner_task, build_planner_suffix, build_chat_prompt_for_model
 from agents.coder import plan_and_code_query
 from agents.coder.diff_coder import diff_generate_and_apply
 from agents.triggers import register_node
@@ -198,7 +198,8 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         memory_section = f"\n# Memory\nBelow is a record of previous improvement attempts and their outcomes:\n {prompt['Memory']}\n"
 
     user_prompt = f"\n# Task description\n{prompt['Task description']}{memory_section}{prompt['Branch Evolution History']}\n\n{instructions}"
-    prompt_complete = f"{introduction}\n\n{user_prompt}\n\nLet me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe current solution uses the following code:\n{prompt['Previous solution']['Code']}\nIts output was:\n{output}\nBuilding on this and my evolution trajectory, I'll develop an improved approach."
+    assistant_prefix = f"Let me approach this systematically.\nFirst, I'll review the dataset:\n{agent.data_preview}\nThe current solution uses the following code:\n{prompt['Previous solution']['Code']}\nIts output was:\n{output}\nBuilding on this and my evolution trajectory, I'll develop an improved approach."
+    prompt_complete = build_chat_prompt_for_model(agent.acfg.code.model, introduction, user_prompt, assistant_prefix)
 
     parent_node.add_expected_child_count()
 
@@ -281,7 +282,7 @@ def _diff_evolution(agent, prompt_base, data_preview, parent_node):
     modules = planning_result.get('module', [])
     plans = planning_result.get('plan', {})
 
-    if not modules and not plans:
+    if not planning_result.get("parse_success", False):
         raise RuntimeError("Evolution planner returned empty result, triggering outer fallback")
 
     if not modules and plans:

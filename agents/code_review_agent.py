@@ -48,7 +48,8 @@ CODE_REVIEW_SPEC = FunctionSpec(
                     "- SEARCH block must match original code EXACTLY (character-by-character, including all spaces/tabs)\n"
                     "- Only include the specific buggy lines that need fixing\n"
                     "- Can provide multiple SEARCH/REPLACE blocks for different bugs\n"
-                    "- Do NOT output complete code - only diff blocks\n\n"
+                    "- Do NOT output complete code - only diff blocks\n"
+                    "- Do NOT wrap output in markdown code fences (``` or ```python) - output raw diff only\n\n"
                     "If needs_revision=false: MUST be null (DO NOT output code)."
                 )
             }

@@ -1,6 +1,9 @@
 """Build guidance description for agent from task/model JSON."""
 import json
+from pathlib import Path
 from typing import Dict, List, Any
+
+INIT_SOLUTION_JSON = Path(__file__).resolve().parent / "init_solution_paths.json"
 
 
 def _load_json(path: str) -> Dict:
@@ -36,8 +39,22 @@ def _build_guidance_text(task_name: str, tasks: Dict, models: Dict) -> str:
     for i, m in enumerate(model_list):
         lines.append(f"\nModel{i+1}: {m['model_name']}\n")
         lines.append(f"Description:{m['description']}\n")
-        lines.append("Code template:```python\n" + m["code_template"] + "\n```")
+        lines.append("Code template (MUST copy exactly — do NOT change model variant names or file paths):\n```python\n" + m["code_template"] + "\n```")
     return "\n".join(lines)
+
+
+def get_init_solution_paths(exp_id: str) -> List[str]:
+    """Load init solution paths for exp_id from engine/coldstart/init_solution_paths.json."""
+    if not INIT_SOLUTION_JSON.exists():
+        return []
+    try:
+        data = _load_json(str(INIT_SOLUTION_JSON))
+        paths = data.get(exp_id)
+        if isinstance(paths, list):
+            return [str(p) for p in paths if p]
+        return []
+    except Exception:
+        return []
 
 
 def build_guidance_description(cfg: Any) -> str:
