@@ -83,6 +83,8 @@ def _build_messages(system_message: str | None, user_message: str | None) -> lis
         messages.append({"role": "system", "content": system_message})
     if user_message:
         messages.append({"role": "user", "content": user_message})
+    else:
+        messages.append({"role": "user", "content": ""})
     return messages
 
 
