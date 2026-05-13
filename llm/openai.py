@@ -84,6 +84,7 @@ def _build_messages(system_message: str | None, user_message: str | None) -> lis
     if user_message:
         messages.append({"role": "user", "content": user_message})
     else:
+        # 使用vllm+qwen模型时，缺失user会导致报错
         messages.append({"role": "user", "content": ""})
     return messages
 
