@@ -64,7 +64,7 @@ def generate_initial_plan(
         instructions += f"\n\n# Available Components\n\n{initial_prompt_dict['Available Components']}\n"
 
     introduction = (
-        "You are a Kaggle grandmaster attending a competition. "
+        "You are a domain expert proficient in surrogate model modeling. "
         "Based on the current solution, generate an improvement plan."
     )
 

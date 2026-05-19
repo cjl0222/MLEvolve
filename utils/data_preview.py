@@ -193,10 +193,10 @@ def generate(base_path, include_file_details=True, simple=False):
 
         if has_validation:
             msg = []
-            msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
+            msg.append("\n**TASK DATA STRATEGY - I will READ CAREFULLY**")
             msg.append(
                 "\n"
-                "In competitions, 'validation' files are NOT always unlabeled test data.\n"
+                "In ML tasks, 'validation' files are NOT always unlabeled test data.\n"
                 "They often contain labels and should be treated as additional training data.\n"
                 "\n"
                 "REQUIRED STEPS:\n"

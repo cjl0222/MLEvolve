@@ -48,7 +48,7 @@ def run(agent, parent_node: SearchNode) -> SearchNode:
         return run_improve(agent, parent_node)
 
     introduction = (
-        "You are a Kaggle grandmaster attending a competition. You are provided with a previously developed "
+        "You are a domain expert proficient in surrogate model modeling. You are provided with a previously developed "
         "solution below and should improve it in order to further increase the (test time) performance. "
         "For this you should first outline a brief plan in natural language for how the solution can be improved and "
         "then implement this improvement in Python based on the provided previous solution. "
@@ -240,7 +240,7 @@ _EVOLUTION_EXTRA_GUIDELINE = (
 _EVOLUTION_PLANNER_TASK = build_planner_task(_EVOLUTION_STAGE_INTRO, _EVOLUTION_EXTRA_GUIDELINE)
 
 _EVOLUTION_DIFF_INTRODUCTION = (
-    "You are a Kaggle grandmaster attending a competition. You are provided with a previously developed "
+    "You are a domain expert proficient in surrogate model modeling. You are provided with a previously developed "
     "solution and a detailed improvement plan based on evolution trajectory analysis. Your task is to "
     "implement the improvement plan, learning from the evolution trajectory to enhance the solution's "
     "test set performance."
