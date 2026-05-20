@@ -86,7 +86,7 @@ def run(
         return None
 
     introduction = (
-        "You are a Kaggle grandmaster attending a competition. "
+        "You are a domain expert proficient in surrogate model modeling. "
         "You are provided with multiple successful solutions from different independent branches below. "
         "Your task is to synthesize these diverse approaches and create a completely NEW solution "
         "that draws inspiration from their strengths. "

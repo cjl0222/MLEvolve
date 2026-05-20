@@ -43,22 +43,55 @@ def run(agent, init_solution_path: Optional[str] = None) -> SearchNode:
             logger.info(f"[draft] → node {new_node.id} (branch={new_node.branch_id}) [init_solution]")
             return new_node
 
-    professional_identity = (
-        "🏆 You are a Kaggle Grandmaster - a top-tier ML expert competing to WIN.\n\n"
-        "**Your Standards**:\n"
-        "✓ Design complete ML pipelines (data → model → training → inference)\n"
-        "✓ Implement real models that LEARN from data (not baseline scripts with constants)\n"
-        "✓ Generate predictions through ACTUAL MODEL INFERENCE on each sample\n"
-        "✓ Compete for TOP performance, not trivial baselines\n\n"
-        "Your solution will be evaluated on a real leaderboard. Treat this with professionalism.\n\n"
+    professional_identity = ( 
+        "You are a domain expert proficient in surrogate model modeling—a top-tier machine learning specialist skilled in leveraging machine learning and physical laws for physical field prediction tasks, with the goal of optimizing evaluation metrics for these tasks.\n\n"
+        "Your standards:\n"
+        "✓ Design a complete machine learning pipeline (Data → Model → Training → Inference) or (Data → Pre-trained Model → Fine-tuning → Inference).\n"
+        "✓ Implement models that truly learn from data (rather than baseline scripts that merely use constants).\n"
+        "✓ Generate predictions by performing real model inference on each sample.\n"
+        "✓ Pursue state-of-the-art performance for surrogate models, rather than settling for simple baseline solutions.\n\n"
+        "Your solution will be evaluated on real-world data; please approach this with professional rigor.\n\n"
+    )
+
+    background = (
+        "**Physical Field Types** you need to handle: Fluid dynamics (velocity/pressure fields), Structural mechanics (stress/strain fields), Heat transfer (temperature fields), Electromagnetic fields, and Multi-physics coupling.\n"
+        "Physical Laws/Governing Equations:\n"
+        "**Scenario Classification and Input/Output Specifications**:\n\n"
+        "1. **Parameters → Parameters**\n"
+        "   - Description: Input a fixed-dimensional parameter vector; output performance metrics or target parameters in scalar or vector form.\n"
+        "   - Input x: `[N, D_in]` (Number of samples × Input features) parameter configuration vector.\n"
+        "   - Output y: `[N, D_out]` (Number of samples × Output features) performance scalars or optimization parameters.\n"
+        "   - Example: AutoML hyperparameter optimization, Geometric dimensions → Lift coefficient.\n\n"
+        "2. **Parameters → Structured Physical Fields**\n"
+        "   - Description: Input a parameter vector (e.g., initial conditions, boundary conditions, material parameters); output a physical field defined on a structured grid (rectangular grid), potentially spanning multiple time steps.\n"
+        "   - Input x: `[N, D_feat]` (Number of samples × Feature dimensions) initial/control parameter vector.\n"
+        "   - Output y: `[N, H, W]` or `[N, H, W, T]` or `[N, H, W, T, C]` (Samples × Height × Width × (Time steps) × (Channels)).\n"
+        "   - Example: Inflow parameters → Pressure field around a 2D airfoil.\n\n"
+        "3. **Parameters → Unstructured Physical Fields on Fixed Geometry**\n"
+        "   - Description: Input a parameter vector; output physical quantities defined on a mesh with a fixed number of nodes (unstructured grid, constant node count), potentially spanning multiple time steps.\n"
+        "   - Input x: `[N, D_feat]` (Number of samples × Feature dimensions) operating condition/load parameter vector.\n"
+        "   - Output y: `[N, P, T, C]` or `[N, P, C]` (Samples × Nodes × (Time steps) × Channels).\n"
+        "   - Example: Load parameters → Stress distribution on a fixed grid.\n\n"
+        "4. **Parameters → Unstructured Physical Fields on Variable Geometry**\n"
+        "   - Description: Input a parameter vector plus geometric information (point cloud coordinates, SDF, normals, etc.); output physical quantities on the corresponding point cloud. The number of points varies per sample (due to changing geometry).\n"
+        "   - Input x: `[N, D_feat]` (Operating condition parameters) + Geometric information for each sample `geometry: [P_i, 7]` (Number of points × 7: xyz + SDF + normals).\n"
+        "   - Output y: `[P_i, C]` (Number of points × Channels).\n"
+        "   - Example: Design parameters + Geometric point cloud → Surface pressure distribution on an airfoil.\n\n"
+        "5. **Structured Physical Field → Structured Physical Field**\n"
+        "   - Description: Input one or more structured physical fields (e.g., initial flow field, boundary conditions, parameter fields); output another structured physical field (e.g., evolved flow field, pressure distribution).\n"
+        "   - Input x: `[N, H, W, C_in]` (Samples × Height × Width × Input channels) initial/boundary structured fields (may include masks/SDF/dimensionless numbers).\n"
+        "   - Output y: `[N, H, W, T, C_out]` or `[N, H, W, C_out]` (Samples × Height × Width × (Time steps) × Output channels).\n"
+        "   - Example: Initial temperature field → Evolved temperature field via heat conduction; Low-resolution flow field → High-resolution flow field (Super-resolution).\n\n"
+        "Based on the specific task, you will select the appropriate scenario definition and strictly adhere to the corresponding input/output specifications.\n"
     )
 
     introduction = (
         professional_identity +
-        "Now, let's begin the competition. "
-        "You need to come up with an excellent and creative plan for a competitive solution "
-        "and then implement this solution in Python with the quality expected of a Kaggle Grandmaster. "
-        "We will now provide a description of the task."
+        background + 
+        "The physical field surrogate model modeling task now begins officially. "
+        "You are required to propose an excellent and innovative solution, "
+        "and implement this solution in Python with master-level expertise in machine learning and expert-level understanding in physics. "
+        "We will now provide the task description."
     )
     prompt: Any = {
         "Introduction": introduction,

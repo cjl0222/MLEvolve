@@ -259,7 +259,7 @@ class SearchNode(DataClassJsonMixin):
                 if successful:
                     # best_metric = max(n.metric.value for n in successful if n.metric and n.metric.value is not None)
                     best_metric = max(n.metric for n in successful if n.metric and n.metric.value is not None)
-                    stats_parts.append(f"{len(successful)} successful (best: {best_metric:.4f})")
+                    stats_parts.append(f"{len(successful)} successful (best: {best_metric.value:.4f})")
                 else:
                     stats_parts.append(f"0 successful (all failed or buggy)")
 

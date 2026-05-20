@@ -41,7 +41,7 @@ def determine_metric_direction(agent) -> None:
     logger.info("Starting pre-determination of metric optimization direction...")
     logger.info("=" * 80)
 
-    prompt = f"""You are analyzing a machine learning competition task. Your task is to determine whether the evaluation metric should be minimized or maximized.
+    prompt = f"""You are analyzing a machine learning surrogate modeling task. Your task is to determine whether the evaluation metric should be minimized or maximized.
 
     **IMPORTANT: Focus on the EVALUATION section in the task description, which specifies the metric used to score submissions.**
 
@@ -150,7 +150,7 @@ def get_review_func_spec(use_memory: bool) -> FunctionSpec:
 def _build_introduction(agent) -> str:
     use_memory = getattr(agent.acfg, "use_global_memory", False)
     intro = (
-        "You are a Kaggle grandmaster attending a competition. "
+        "You are a domain expert proficient in surrogate model modeling. "
         "You have written code to solve this task and now need to evaluate the output of the code execution. "
         "You should determine if there were any bugs as well as report the empirical findings.\n\n"
         "You MUST respond with a JSON object containing ALL of the following fields:\n"

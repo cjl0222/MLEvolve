@@ -36,7 +36,7 @@ def _get_fusion_candidates(agent, parent_node: SearchNode) -> List[SearchNode]:
 def fuse_two_nodes(agent, source_node: SearchNode, target_node: SearchNode) -> SearchNode:
     # 需要改提示词
     introduction = (
-        "You are a Kaggle grandmaster attending a competition. "
+        "You are a domain expert proficient in surrogate model modeling. "
         "You are provided with a successful reference solution from another approach below. "
         "Your task is to analyze this reference solution and improve your current solution by drawing inspiration from its strengths. "
         "First, outline a brief plan in natural language for how you will incorporate the best ideas, "
@@ -171,7 +171,7 @@ def _fuse_with_multiple_references(
     agent, parent_node: SearchNode, reference_nodes: List[SearchNode]
 ) -> SearchNode:
     introduction = (
-        "You are a Kaggle grandmaster attending a competition. "
+        "You are a domain expert proficient in surrogate model modeling. "
         "You are provided with multiple successful solutions from different approaches below. "
         "Your task is to analyze these reference solutions and improve your current solution by drawing inspiration from their strengths. "
         "First, outline a brief plan in natural language for how you will incorporate the best ideas, "
@@ -359,13 +359,13 @@ _MULTI_FUSION_EXTRA_GUIDELINE = (
 _MULTI_FUSION_PLANNER_TASK = build_planner_task(_MULTI_FUSION_STAGE_INTRO, _MULTI_FUSION_EXTRA_GUIDELINE)
 
 _FUSION_DIFF_INTRODUCTION = (
-    "You are a Kaggle grandmaster attending a competition. You are provided with a previously developed "
+    "You are a domain expert proficient in surrogate model modeling. You are provided with a previously developed "
     "solution and a detailed improvement plan based on analysis of a reference solution. Your task is to "
     "implement the improvement plan, selectively incorporating the best ideas from the reference."
 )
 
 _MULTI_FUSION_DIFF_INTRODUCTION = (
-    "You are a Kaggle grandmaster attending a competition. You are provided with a previously developed "
+    "You are a domain expert proficient in surrogate model modeling. You are provided with a previously developed "
     "solution and a detailed improvement plan based on comparative analysis of multiple reference solutions. "
     "Your task is to implement the improvement plan, selectively incorporating the best ideas from the "
     "most relevant reference."
