@@ -371,7 +371,7 @@ class MetaAgent:
         context: StepwiseContext, # 上下文（draft/improve、memory）
         ) -> Tuple[str, str]:
         introduction = (
-            "You are a Kaggle grandmaster attending a competition, an expert in writing clean, efficient, and competition-winning Python code for ML tasks. "
+            "You are a domain expert proficient in surrogate model modeling, an expert in writing clean, efficient, and high-performance Python code for ML tasks. "
             "You have received code snippets from a team of specialized agents, each focusing on a specific part of the ML pipeline. "
             "Your critical task is to intelligently merge these partial scripts into a single, cohesive, and fully runnable Python script."
         )

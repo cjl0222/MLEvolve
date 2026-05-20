@@ -8,7 +8,9 @@ import logging
 from pathlib import Path
 
 import humanize
+import numpy as np
 import pandas as pd
+import h5py
 from genson import SchemaBuilder
 from pandas.api.types import is_numeric_dtype
 
@@ -16,6 +18,8 @@ from pandas.api.types import is_numeric_dtype
 code_files = {".py", ".sh", ".yaml", ".yml", ".md", ".html", ".xml", ".log", ".rst"}
 # we treat these files as text (rather than binary) files
 plaintext_files = {".txt", ".csv", ".json", ".tsv"} | code_files
+# HDF5 file extensions
+hdf5_files = {".h5", ".hdf5", ".hdf"}
 
 # 这里是获取数据文件的元数据以及数据预览的工具函数，agent 会用它来生成对数据的理解和分析，帮助后续的代码实现和数据处理。
 # 它会递归地遍历输入目录下的文件，生成一个文本预览，包括文件结构、每个文件的大小（行数或字节数）以及一些 csv/json 文件的内容预览（如列信息、数据分布等）。
@@ -151,6 +155,110 @@ def preview_json(p: Path, file_name: str):
     )
 
 
+def preview_hdf5(p: Path, file_name: str, simple=True) -> str:
+    """Generate a textual preview of a HDF5 file.
+    
+    Args:
+        p (Path): the path to the HDF5 file
+        file_name (str): the file name to use in the preview
+        simple (bool, optional): whether to use a simplified version of the preview. Defaults to True.
+        
+    Returns:
+        str: the textual preview
+    """
+    out = []
+    
+    try:
+        with h5py.File(p, 'r') as f:
+            # 获取文件大小
+            file_size = p.stat().st_size
+            size_str = humanize.naturalsize(file_size)
+            
+            # 收集所有 dataset 和 group 信息
+            datasets_info = []
+            groups_info = []
+            
+            def list_items(name, obj):
+                if isinstance(obj, h5py.Dataset):
+                    datasets_info.append((name, obj.shape, str(obj.dtype)))
+                elif isinstance(obj, h5py.Group):
+                    groups_info.append(name)
+            
+            f.visititems(list_items)
+            
+            out.append(f"-> {file_name} is a HDF5 file ({size_str})")
+            
+            # 显示 group 信息
+            if groups_info:
+                out.append(f"   - Groups: {', '.join(groups_info)}")
+            
+            # 显示 dataset 信息
+            if datasets_info:
+                if simple:
+                    # 简化模式：只显示 dataset 名称和形状
+                    ds_summary = ", ".join([f"{name} {shape}" for name, shape, _ in datasets_info])
+                    out.append(f"   - Datasets: {ds_summary}")
+                else:
+                    # 详细模式：显示 dataset 名称、形状和数据类型
+                    out.append("   - Dataset details:")
+                    for name, shape, dtype in datasets_info:
+                        # 尝试读取前几个值
+                        try:
+                            sample_data = f[name][:]
+                            nan_count = int(np.isnan(sample_data).sum()) if np.issubdtype(sample_data.dtype, np.number) else 0
+                            if sample_data.size > 0:
+                                min_val = float(np.nanmin(sample_data))
+                                max_val = float(np.nanmax(sample_data))
+                                out.append(
+                                    f"     • {name}: shape={shape}, dtype={dtype}, "
+                                    f"range=[{min_val:.4f}, {max_val:.4f}], {nan_count} nan values"
+                                )
+                            else:
+                                out.append(f"     • {name}: shape={shape}, dtype={dtype}, empty")
+                        except Exception:
+                            out.append(f"     • {name}: shape={shape}, dtype={dtype}")
+            
+            # 尝试使用 H5Dataset 获取更详细的信息（如果可用）
+            h5_dataset_info = _try_get_h5dataset_info(f, file_name)
+            if h5_dataset_info:
+                out.append(h5_dataset_info)
+                
+    except Exception as e:
+        out.append(f"-> {file_name} could not be read as HDF5 file: {e}")
+    
+    return "\n".join(out)
+
+
+def _try_get_h5dataset_info(f: h5py.File, file_name: str) -> str:
+    """尝试使用本地 H5 工具获取更详细的 HDF5 文件信息。
+    
+    如果文件符合 param2grid 格式（包含 x 和 y dataset），返回详细的数据信息。
+    使用本地 utils/h5_utils.py 中的 H5 类，无需外部依赖。
+    """
+    try:
+        from utils.h5_utils import H5
+        
+        # 检查是否有 x 和 y dataset
+        if 'x' in f and 'y' in f:
+            x_data = H5.read_tensor(f, group='x')
+            y_data = H5.read_tensor(f, group='y')
+            
+            info_parts = [f"   - H5Dataset (param2grid) detected:"]
+            info_parts.append(f"     • x (features): shape={tuple(x_data.shape)}, dtype={x_data.dtype}")
+            info_parts.append(f"     • y (targets): shape={tuple(y_data.shape)}, dtype={y_data.dtype}")
+            
+            # 计算训练/测试集划分（默认 0.9）
+            train_samples = int(x_data.size(0) * 0.9)
+            info_parts.append(f"     • Recommended split: train={train_samples}, test={x_data.size(0) - train_samples} (ratio=0.9)")
+            
+            return "\n".join(info_parts)
+    except Exception as e:
+        # 其他错误，静默处理
+        logger.debug(f"Could not get H5 info for {file_name}: {e}")
+    
+    return ""
+
+
 def generate(base_path, include_file_details=True, simple=False):
     """Generate a textual preview of a directory (structure + file previews).
     为 agent 生成工作目录的数据快照——文件结构 + 关键文件内容预览，让 LLM 在生成代码前就能理解数据集的结构和特征。
@@ -174,6 +282,8 @@ def generate(base_path, include_file_details=True, simple=False):
                 out.append(preview_csv(fn, file_name, simple=simple)) # 生成 CSV 文件的统计摘要，simple 参数控制详细程度
             elif fn.suffix == ".json":
                 out.append(preview_json(fn, file_name))
+            elif fn.suffix in hdf5_files: # HDF5 文件预览
+                out.append(preview_hdf5(fn, file_name, simple=simple))
             elif fn.suffix in plaintext_files: # # 只有小文本文件才直接读取内容，大文件只展示结构和大小
                 if get_file_len_size(fn)[0] < 30:  
                     with open(fn) as f:
@@ -193,10 +303,10 @@ def generate(base_path, include_file_details=True, simple=False):
 
         if has_validation:
             msg = []
-            msg.append("\n**COMPETITION DATA STRATEGY - I will READ CAREFULLY**")
+            msg.append("\n**TASK DATA STRATEGY - I will READ CAREFULLY**")
             msg.append(
                 "\n"
-                "In competitions, 'validation' files are NOT always unlabeled test data.\n"
+                "In ML tasks, 'validation' files are NOT always unlabeled test data.\n"
                 "They often contain labels and should be treated as additional training data.\n"
                 "\n"
                 "REQUIRED STEPS:\n"

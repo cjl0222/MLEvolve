@@ -3,7 +3,7 @@
 import logging
 import random
 import time
-from typing import Callable, List, Dict
+from typing import Callable, List, Dict, Optional
 
 from engine.executor import ExecutionResult
 from engine.search_node import SearchNode, Journal

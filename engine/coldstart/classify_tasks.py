@@ -16,8 +16,8 @@ OUTPUT_JSON = PROJECT_ROOT / "engine" / "coldstart" / "competition_tag_classifie
 
 CATEGORIES = ["General Image", "Detection", "Segmentation", "NLP", "Audio", "Others"]
 
-SYSTEM_PROMPT = """You are a machine learning task classifier.
-Given a Kaggle competition's task name and description, classify it by calling the classify function.
+SYSTEM_PROMPT = """You are a machine learning surrogate modeling task classifier.
+Given a surrogate model prediction's task name and description, classify it by calling the classify function.
 
 Rules:
 - "General Image": image classification, image regression, or other general image tasks that are NOT detection or segmentation
@@ -33,7 +33,7 @@ CLASSIFY_FUNC = {
     "type": "function",
     "function": {
         "name": "classify",
-        "description": "Submit the classification result for a Kaggle competition task",
+        "description": "Submit the classification result for a surrogate modeling task",
         "parameters": {
             "type": "object",
             "properties": {

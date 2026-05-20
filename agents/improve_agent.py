@@ -24,7 +24,7 @@ logger = logging.getLogger("MLEvolve")
 
 def run(agent, parent_node: SearchNode) -> SearchNode:
     improvement_standards = (
-        "🎯 As a Grandmaster, make MEANINGFUL improvements that boost leaderboard performance.\n\n"
+        "🎯 As an Expert, make MEANINGFUL improvements that boost evaluation metric performance.\n\n"
         "**Acceptable**: Advanced architectures, ensemble techniques, feature engineering, hyperparameter optimization, improved pipelines.\n"
         "**NOT Acceptable**: Cosmetic changes, minor tweaks without justification, breaking functionality.\n\n"
     )
@@ -274,7 +274,7 @@ _IMPROVE_EXTRA_GUIDELINE = (
 _IMPROVE_PLANNER_TASK = build_planner_task(_IMPROVE_STAGE_INTRO, _IMPROVE_EXTRA_GUIDELINE)
 
 _IMPROVE_DIFF_INTRODUCTION = (
-    "You are a Kaggle grandmaster attending a competition. You are provided with a previously developed "
+    "You are a domain expert proficient in surrogate model modeling. You are provided with a previously developed "
     "solution and a detailed improvement plan. Your task is to implement the improvement plan to enhance "
     "the solution's test set performance."
 )
