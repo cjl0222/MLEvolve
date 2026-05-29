@@ -15,6 +15,73 @@ workspace_dir: ./runs
 preprocess_data: True
 copy_data: False
 
+# # ============================================================
+# #  Domain-specific configuration (新增)
+# # ============================================================
+# domain:
+#   type: "kaggle"  # 可选: "kaggle" | "physics_surrogate" | "custom"
+  
+#   # --- 物理场代理模型专用配置 ---
+#   physics_surrogate:
+#     # 任务类型
+#     field_type: "fluid_dynamics"           # fluid_dynamics / structural / thermal / electromagnetic / multiphysics
+#     control_equation: "navier_stokes"      # 控制方程
+#     task_formulation: "pde_solver"        # pde_solver / parameter_inversion / acceleration
+    
+#     # 数据格式
+#     input_format: "hdf5"                   # hdf5 / numpy / vtk / csv
+#     output_format: "hdf5"                  # hdf5 / numpy / vtk / csv / flattened_csv
+    
+#     # 评估指标
+#     primary_metric: "l2_relative_error"
+#     optimization_direction: "minimize"     # minimize / maximize
+#     sub_metrics:
+#       - name: "l2_error"
+#         weight: 0.4
+#       - name: "linf_error"
+#         weight: 0.3
+#       - name: "peak_error"
+#         weight: 0.3
+#     combined_score_formula: "0.4 * l2 + 0.3 * linf + 0.3 * peak"
+    
+#     # 物理约束
+#     physical_constraints:
+#       - "divergence_free"
+#       - "no_slip_boundary"
+#       - "mass_conservation"
+#     constraint_penalty_weight: 0.1
+    
+#     # 推荐架构
+#     recommended_architectures:
+#       - "FNO"
+#       - "DeepONet"
+#       - "PINN"
+    
+#     # 训练参数范围
+#     training:
+#       default_learning_rate: 1.0e-3
+#       default_batch_size: 32
+#       default_epochs: 1000
+#       optimizer: "AdamW"
+#       supports_mixed_precision: true
+    
+#     # 资源调整
+#     exec_timeout: 86400       # 24小时（比默认9小时更长）
+#     time_limit: 172800        # 48小时
+#     steps: 200                # 比默认500步更少（每步成本更高）
+    
+#     # 数据预处理
+#     preprocessing:
+#       normalization: "physical_reference"  # physical_reference / statistical / minmax
+#       pod_reduction: false
+#       pod_modes: 50
+    
+#     # 参考实现
+#     references:
+#       paper: "Fourier Neural Operator for Parametric PDE Solutions"
+#       github: "https://github.com/zongyi-li/fourier_neural_operator"
+#       citation: "Li et al. 2020"
+
 # Resource
 start_cpu_id: 0
 cpu_number: 21
@@ -57,16 +124,15 @@ agent:
 
   # --- LLM models ---
   code:
-    model:  qwen3.5:35b-a3b
+    model:  qwen3.6-27b
     temp: 1
-    base_url: "http://127.0.0.1:11434/v1"   #   glm-4.7-flash:latest   qwen3.5:35b-a3b
-    api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"    
+    base_url: "http://172.28.78.33:8000/v1"   #   glm-4.7-flash:latest   qwen3.5:35b-a3b
+    api_key: "123123"    
   feedback:
-    model:  qwen3.5:35b-a3b
+    model:  qwen3.6-27b
     temp: 1
-    base_url: "http://127.0.0.1:11434/v1"   
+    base_url: "http://172.28.78.33:8000/v1"   
     api_key: "sk-wLN5zqMrCyM0VmquOMyQAHlxK8T1Uar01NZMeqBGE5QiekNa"   
-
 
   # code:
   #   model: Qwen/Qwen3.5-35B-A3B-GPTQ-Int4
@@ -118,7 +184,7 @@ agent:
   use_global_memory: True
   memory_similarity_threshold: 0.7
   memory_embedding_device: cuda
-  memory_embedding_model_path: "/home/zhangwh/.cache/huggingface/hub/models--BAAI--bge-base-en-v1.5/snapshots/a5beb1e3e68b9ab74eb54cfd186867f64f240e1a"  # HuggingFace model name or local path
+  memory_embedding_model_path: "/data2/cjl/embedding_model/all-MiniLM-L6-v2"  # HuggingFace model name or local path
 
   # --------------------------------------------------------
   #  Search tree params
@@ -188,5 +254,7 @@ agent:
 coldstart:
   use_coldstart: True
   task_json_path: "engine/coldstart/competition_tag_classified.json"
-  model_json_path: "engine/coldstart/models_guidance_classified.json"
-  description: ""
+  skills_json_path: "engine/coldstart/skills.json"
+  rrf_k: 60
+  top_k: 3
+  enable_time_cost_reorder: false

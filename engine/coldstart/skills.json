@@ -1,0 +1,189 @@
+{
+  "skills": [
+    {
+      "id": "geopt-p2m1",
+      "name": "GeoPT ",
+      "io": [
+        "p2m1",
+        "p2p",
+        "p2m2"
+      ],
+      "description": "GeoPT (Geometry-lifted Physics Pre-training) is a unified pre-trained model for general physics simulation based on lifted geometric pre-training, enabling dynamics-aware self-supervision without physics labels and is an excellent backbone for various physical simulation tasks like fluid mechanics for cars/aircraft/ships, and solid mechanics in crash simulation, etc., supporting industrial-fidelity physical simulation with reduced labeled data requirements by 20-60% and 2× accelerated convergence.",
+      "time_cost": "high",
+      "applicable_problems": [
+        "physical simulation of fluid mechanics (cars/aircraft/ships)",
+        "solid mechanics crash simulation",
+        "physics simulation without physics labels",
+        "industrial-fidelity surrogate modeling with limited labeled data",
+        "parameter-to-grid prediction",
+        "parameter-to-mesh prediction",
+        "physics PDE solving with  approach"
+      ],
+      "cases": [
+        {
+          "io": "p2m1",
+          "applicable_problems": "physics PDE solving withapproach",
+          "description": "Solving ignition temperature field simulation using . A 3-layer MLP with 20 hidden units learns the temperature distribution governed by a PDE, trained for 10000 epochs with AdamW optimizer.",
+          "para": "Ignition temperature field simulation, with 20 hidden units, 10000 epochs, AdamW optimizer",
+          "code_template": "#  import torch\nimport torch.nn as nn\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom matplotlib import cm\nimport time\nimport os\nset_seed(123)\n\nsave_dir = 'ignition_results_correct_boundary'\nos.makedirs(save_dir, exist_ok=True)\n\n#train\nlayers = [3, 20, 20, 1]\nmodel = (layers).to(device)\ndata = generate_training_data(num_pde=1000, num_initial=200, num_boundary=200, num_axis=100)\nmodel, loss_history = train_model(model, data, epochs=10000, lr=1e-4, log_interval=500)\n\n#save\nbest_model_path = os.path.join(save_dir, 'ignition_best_model.pth')\ntorch.save(model.state_dict(), os.path.join(save_dir, 'ignition_best_model.pth'))\nloss_data_path = os.path.join(save_dir, 'loss_history.txt')\nnp.savetxt(loss_data_path, loss_history, header='Training Loss History')\n\n# plot\ntimes_to_plot = [5000, 10000, 18000, 25000]\nfor t in times_to_plot:\n    if t <= t_max:\n        print(f\"生成 t={t/60:.0f}min 温度分布...\")\n        temp_dist_path = os.path.join(save_dir, f'temp_dist_{t/60:.0f}min_best.png')\n        plot_temperature_distribution(model, t, save_path=temp_dist_path)"
+        }
+      ]
+    },
+    {
+      "id": "pfn",
+      "name": "TabPFN (Tabular Prior-Fitted Network)",
+      "io": [
+        "p2m0",
+        "p2g",
+        "p2p"
+      ],
+      "description": "TabPFN (Table-oriented PFN) is a specialized pre-trained model of PFN for tabular data, generating reliable predictive distributions and is an excellent backbone for various tabular tasks like classification, regression and small-sample data analysis, etc. support tabular data.",
+      "time_cost": "low",
+      "applicable_problems": [
+        "Rigid Body Impact Dynamics: car_crash:solid mechanics crash simulation",
+        "cylindrical_charge:tabular regression tasks",
+        "AutoML hyperparameter optimization",
+        "small-sample tabular data analysis",
+        "parameter-to-vector regression",
+        "parameter-to-grid prediction from tabular features"
+      ],
+      "cases": [
+        {
+          "io": "p2m0",
+          "applicable_problems": "Rigid Body Impact Dynamics: car_crash:solid mechanics crash simulation",
+          "description": "Car-crash simulation is a core task of industrial-scale solid mechanics simulation for assessing vehicle structural safety under high-speed impact. The car-crash benchmark used by GeoPT derives from the Neon full-vehicle model of the National Crash Analysis Center (NCAC), a widely adopted industrial standard crash benchmark equipped with detailed part-level meshing and heterogeneous material property assignment. This simulation targets predicting the maximum 2D Von Mises equivalent stress of each finite element during the whole dynamic collision process. It adopts the 3D Lagrangian explicit finite element formulation to solve transient momentum balance, taking into account large deformation, penalty function-based contact interactions, elastoplastic material responses, as well as potential damage, failure and erosion behaviors. Collision angle is set as the sole variable and uniformly sampled within [-45°, 45°]; even with fixed initial geometry, different angles produce completely different contact sequences, load transfer paths and structural deformation modes.",
+          "para": "Standard tabular regression, 90/10 train-test split, automatic preprocessing with PCA",
+          "code_template": "import time\nimport sys\nsys.path.append('/data2/glx/icl_model')\nimport joblib\nfrom icl_model.utils.regressor import Regressor\nfrom icl_model.torch_utils.dataset.h5 import H5Dataset\n# load data\ndata = H5Dataset(\n    filename = '/data2/xinyi/carcrash.h5',\n    datatype = 'p2m0',\n    train_test_split = 0.9\n)\nxtrain, ytrain, geomtrain = data.train_data \n xtest, ytest, geomtest = data.test_data\n\n# load model\n# available model: icl2 pfn2 pfn2.5 pfn2.6\nmodel = 'icl2'\nprint(f'Evaluating data by model {model}')\nregressor = Regressor(\n    model = model,\n    preprocess = True\n)\n\n# prediction\nregressor.fit(xtrain, ytrain)\nstart = time.time()\nypred = regressor.predict(xtest)\nprint(time.time() - start)\n# evaluation\nmetric = regressor.evaluate(datatrue=ytest, datapred=ypred)\nprint(model, metric)"
+        },
+        {
+          "io": "p2g",
+          "applicable_problems": "Thermal: cylindrical charge:Thermal Stimulation Ignition Problem",
+          "description": "A simple cylindrical charge with an axisymmetric structure has a radius RX of 12.5 mm and a height HX of 20 mm. The initial temperature is 20 °C, and four temperature measurement points are arranged. Heating is applied on all sides, with the heating rate ranging from 0.1 K/min to 100 K/min.Heating raises the temperature of the explosive, which in turn triggers its thermal decomposition. The thermal decomposition releases a large amount of heat and eventually leads to ignition. This process follows the heat conduction equation with a thermal decomposition source term. The primary objective is to obtain the ignition time and ignition location.Specifically, given the boundary heating rate, the surrogate model shall rapidly predict the ignition time and ignition location. Ideally, it can also output the temperature distribution at ignition. Further, it would be preferable to acquire the time-evolving temperature distribution throughout the process.",
+          "para": "Standard tabular regression, 90/10 train-test split, automatic preprocessing with PCA",
+          "code_template": "import time\nimport sys\nsys.path.append('/data2/glx/icl_model')\nimport joblib\nfrom icl_model.utils.regressor import Regressor\nfrom icl_model.torch_utils.dataset.h5 import H5Dataset\n# load data\ndata = H5Dataset(\n    filename = '/data2/xinyi/fire.h5',\n    datatype = 'p2g',\n    train_test_split = 0.9\n)\n xtrain, ytrain, geomtrain = data.train_data \n xtest, ytest, geomtest = data.test_data\n\n# load model\n# available model: icl2 pfn2 pfn2.5 pfn2.6\nmodel = 'icl2'\nprint(f'Evaluating data by model {model}')\nregressor = Regressor(\n    model = model,\n    preprocess = True\n)\n\n# prediction\nregressor.fit(xtrain, ytrain)\nstart = time.time()\nypred = regressor.predict(xtest)\nprint(time.time() - start)\n# evaluation\nmetric = regressor.evaluate(datatrue=ytest, datapred=ypred)\nprint(model, metric)"
+        }
+      ]
+    },
+    {
+      "id": "dpot",
+      "name": "DPOT: Auto-Regressive Denoising Operator Transformer",
+      "io": [
+        "p2p",
+        "g2g0"
+      ],
+      "description": "DPOT (Auto-Regressive Denoising Operator Transformer) is a large-scale pre-trained PDE foundation model built on Fourier attention, which uses an auto-regressive denoising pre-training strategy to extract general physical laws from massive heterogeneous PDE data. It is dedicated to time-dependent PDE numerical solution and parameter-to-physical-field prediction tasks, supports 2D/3D spatial dimensions, regular/irregular meshes, multi-scale and multi-resolution PDE data, enables zero-shot inference and small-sample fine-tuning, and achieves state-of-the-art performance in fluid dynamics, heat transfer, hydraulics and other scientific and engineering computing scenarios.",
+      "time_cost": "medium",
+      "applicable_problems": [
+        "Navier-Stokes Equations: 2D incompressible fluid turbulence simulation",
+        "Diffusion-Reaction Equations: mass diffusion and chemical reaction coupled field prediction",
+        "Shallow-Water Equations: ocean/river flow dynamics simulation",
+        "3D Navier-Stokes Equations: 3D fluid turbulence field solution",
+        "High-Resolution Turbulence Field: 2D high-resolution fluid turbulence prediction",
+        "Steady-State PDE: steady physical field operator learning",
+        "CFDBench: irregular geometry fluid dynamics simulation"
+      ],
+      "cases": [
+        {
+          "io": "g2g0",
+          "applicable_problems": "Navier-Stokes Equations: 2D incompressible fluid turbulence simulation",
+          "description": "This case aims at the 2D incompressible Navier-Stokes equations with viscosity coefficient as the parameter, and predicts the spatiotemporal evolution of the vorticity field. The simulation domain is [0,1]²×[0,T], and the model learns the mapping from the initial flow field and viscosity parameters to the turbulence field, realizing fast prediction of fluid dynamic evolution.",
+          "para": "Viscosity coefficient ν=1e-5,1e-4,1e-3; input time steps T=10; spatial resolution 128×128; patch size=8; noise injection level ε=5×10^-5",
+          "code_template": "import time\nimport sys\nsys.path.append('/data2/glx/icl_model')\nimport joblib\nfrom icl_model.utils.regressor import Regressor\nfrom icl_model.torch_utils.dataset.h5 import H5Dataset\ndata = H5Dataset(filename = '/data2/xinyi/ns_0.1_0.01.h5', datatype = 'g2g0', train_test_split = 0.9)\nxtrain, ytrain = data.train_data\nxtest, ytest = data.test_data\nmodel = 'dpottiny'\nprint(f'Evaluating data by model {model}')\nregressor = Regressor(model = model)\nypred = regressor.predict(xtest, steps=ytest.size(-2))\nmetric = regressor.evaluate(datatrue=ytest, datapred=ypred)\nprint(model, metric)"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Diffusion-Reaction Equations: mass diffusion and chemical reaction coupled field prediction",
+          "description": "This case solves the 2D diffusion-reaction equations, focusing on predicting the density field evolution driven by the coupling of diffusion effect and chemical reaction. The simulation domain is [-2.5,2.5]²×[0,1], and the model captures the coupled dynamic characteristics of diffusion and reaction to output the spatiotemporal density field.",
+          "para": "Diffusion coefficient D, nonlinear reaction term R(u); input time steps T=10; resolution 128×128; dataset sampling weight w=3",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Shallow-Water Equations: ocean/river flow dynamics simulation",
+          "description": "This case targets the 2D shallow-water equations to predict the evolution of water depth and flow velocity. The simulation domain is [-1,1]²×[0,5], and the model learns the wave dynamics and flow transport laws to realize rapid simulation of shallow water flow in oceans and rivers.",
+          "para": "Gravitational acceleration gr, bottom topography b; input time steps T=10; resolution 128×128; dataset sampling weight w=3",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "3D Navier-Stokes Equations: 3D fluid turbulence field solution",
+          "description": "This case extends to 3D incompressible Navier-Stokes equations for 3D turbulence field prediction. The DPOT pre-trained only on 2D data is fine-tuned by replacing 2D FFT with 3D FFT to adapt to 3D spatial dimensions, realizing cross-dimensional transfer of physical laws.",
+          "para": "Replace 2D FFT with 3D FFT; fine-tuning epochs=500; learning rate=1e-4",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "High-Resolution Turbulence Field: 2D high-resolution fluid turbulence prediction",
+          "description": "This case focuses on 2D high-resolution turbulence field prediction with limited training data. The pre-trained DPOT is fine-tuned with small samples to predict high-precision flow field, and the prediction error is significantly reduced compared with training from scratch.",
+          "para": "High-resolution spatial grid; small-sample fine-tuning; fine-tuning epochs=500",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Steady-State PDE: steady physical field operator learning",
+          "description": "This case converts the auto-regressive DPOT into a steady-state PDE solver, focusing on single-step steady physical field prediction. The relative median L1 error is used for evaluation to realize efficient solution of steady-state physical problems.",
+          "para": "Steady-state solution mode; evaluation metric: relative median L1 error; fine-tuning epochs=500",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "CFDBench: irregular geometry fluid dynamics simulation",
+          "description": "This case adapts to CFD problems with irregular geometric boundaries, and adds mask channels to encode complex geometric configurations. The model predicts the velocity and pressure fields of fluid flowing through irregular geometries, adapting to complex engineering fluid scenarios.",
+          "para": "Irregular geometry mask channel; resolution 128×128; input time steps T=10",
+          "code_template": "none"
+        }
+      ]
+    },
+    {
+      "id": "geopt",
+      "name": "GeoPT: Scaling Physics Simulation via Lifted Geometric Pre-Training",
+      "io": ["p2p"],
+      "description": "GeoPT is a unified pre-trained model for general physics simulation based on lifted geometric pre-training. It augments static geometries with synthetic dynamics to achieve dynamics-aware self-supervision without physics labels, and is pre-trained on over one million geometry samples. It is widely applicable to industrial-fidelity fluid mechanics and solid mechanics simulations, reducing labeled physics data requirements by 20%-60% and accelerating convergence by up to 4×, supporting fast adaptation to diverse physical simulation tasks.",
+      "time_cost": "low",
+      "applicable_problems": [
+        "Automotive Aerodynamics: DrivAerML:fluid mechanics aerodynamics simulation",
+        "Aircraft Aerodynamics: NASA-CRM:fluid mechanics aerodynamics simulation",
+        "Aircraft Aerodynamics: AirCraft:fluid mechanics aerodynamics simulation",
+        "Ship Hydrodynamics: DTCHull:fluid mechanics hydrodynamics simulation",
+        "Car Crash Simulation: Car-Crash:solid mechanics crash simulation"
+      ],
+      "cases": [
+        {
+          "io": "p2p",
+          "applicable_problems": "Automotive Aerodynamics: DrivAerML:fluid mechanics aerodynamics simulation",
+          "description": "DrivAerML is a high-fidelity computational fluid dynamics dataset for road-car external aerodynamics, a core industrial fluid mechanics simulation task. It aims to predict the car surface pressure field and surrounding flow velocity field based on RANS simulation. GeoPT reduces the labeled data requirement by 40% and accelerates convergence by 2× for this task, taking 3D car geometry and incoming flow conditions as input and outputting the corresponding physical fields.",
+          "para": "Mesh size ~160M, simulation variable is geometry shape, 100 training samples, 20 test samples; dynamics condition is incoming flow velocity and direction; fine-tune 200 epochs, base learning rate 0.001, optimizer AdamW with OneCycleLR scheduling",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Aircraft Aerodynamics: NASA-CRM:fluid mechanics aerodynamics simulation",
+          "description": "NASA-CRM is a benchmark for aircraft applied aerodynamics surrogate modeling, an industrial fluid mechanics simulation task. It focuses on predicting the aircraft surface pressure coefficient field. GeoPT cuts the labeled data demand by 20% and speeds up convergence by 1.3× for this task, using 3D aircraft geometry, flight speed and angle of attack as input to output the pressure coefficient field.",
+          "para": "Mesh size ~450K, simulation variables are geometry, speed, angle of attack; 105 training samples, 44 test samples; dynamics condition is flight speed and angle of attack; fine-tune 200 epochs, base learning rate 0.001, optimizer AdamW with OneCycleLR scheduling",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Aircraft Aerodynamics: AirCraft:fluid mechanics aerodynamics simulation",
+          "description": "AirCraft is a complex aircraft aerodynamics simulation task that requires predicting six aerodynamic force and moment components simultaneously. It is an industrial fluid mechanics simulation with multi-variable coupling. GeoPT significantly improves prediction accuracy and accelerates convergence by 2×, taking 3D aircraft geometry, speed, angle of attack and sideslip angle as input to output aerodynamic physical fields.",
+          "para": "Mesh size ~330K, simulation variables are geometry, speed, angle of attack, sideslip angle; 100 training samples, 50 test samples; dynamics condition is flight speed, angle of attack and sideslip angle; fine-tune 200 epochs, base learning rate 0.001, optimizer AdamW with OneCycleLR scheduling",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Ship Hydrodynamics: DTCHull:fluid mechanics hydrodynamics simulation",
+          "description": "DTCHull is a ship hydrodynamics simulation task for predicting ship resistance and wave-making, involving water-air two-phase incompressible flow. As an industrial fluid mechanics simulation, GeoPT reduces labeled data needs by 60% and accelerates convergence by 2×, using 3D ship geometry, vessel speed and yaw angle as input to output time-averaged surface pressure and water flow velocity fields.",
+          "para": "Mesh size ~240K, simulation variables are geometry, yaw angle; 100 training samples, 20 test samples; dynamics condition configures two-phase velocity for water and air; fine-tune 200 epochs, base learning rate 0.001, optimizer AdamW with OneCycleLR scheduling",
+          "code_template": "none"
+        },
+        {
+          "io": "p2p",
+          "applicable_problems": "Car Crash Simulation: Car-Crash:solid mechanics crash simulation",
+          "description": "Car-Crash is an industrial-scale solid mechanics simulation for vehicle crash safety assessment, predicting the maximum 2D Von Mises stress of each element during collision. GeoPT lowers labeled data requirements by 20% and accelerates convergence by 4× for this task, taking 3D car geometry and impact angle as input to output the stress field.",
+          "para": "Mesh size ~1M, simulation variable is impact angle; 100 training samples, 30 test samples; dynamics condition is impact direction with linearly decayed velocity magnitude; fine-tune 200 epochs, base learning rate 0.001, optimizer AdamW with OneCycleLR scheduling",
+          "code_template": "none"
+        }
+      ]
+    }
+  ]
+}

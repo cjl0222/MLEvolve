@@ -1,5 +1,11 @@
 {
-  "cylindrical charge":"fire",    
+  "GeoPT_case1":"none",
+  "dpot_case1":"g2g0",
+  "test0526":"p2p",
+  "shock":"p2g",
+  "2dairfoil":"p2p",
+  "car_crash":"p2m0",
+  "cylindrical_charge":"p2g",    
   "3d-object-detection-for-autonomous-vehicles": "Detection",
   "AI4Code": "NLP",
   "aerial-cactus-identification": "General Image",

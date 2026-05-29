@@ -109,6 +109,10 @@ class ColdstartConfig:
     task_json_path: str
     model_json_path: str
     description: str
+    skills_json_path: str
+    rrf_k: int
+    top_k: int
+    enable_time_cost_reorder: bool
 
 
 @dataclass

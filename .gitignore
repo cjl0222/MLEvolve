@@ -1,5 +1,7 @@
 config/
 *.tar.gz
+PREMODELS/
+* copy*
 
 # ===== Python =====
 __pycache__/

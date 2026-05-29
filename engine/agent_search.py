@@ -22,6 +22,7 @@ from agents import (
 from engine import node_selection, evaluation, execution, solution_manager
 from engine.conditions import is_branch_stagnant
 from utils.data_preview import clean_task_desc
+from engine.coldstart.knowledge import build_guidance_description
 
 logger = logging.getLogger("MLEvolve")
 
@@ -61,7 +62,7 @@ class AgentSearch:
         self.branch_successful_nodes: Dict[int, List[SearchNode]] = {}
         self.branch_node_count: Dict[int, int] = {}
         self.use_coldstart = cfg.coldstart.use_coldstart
-        self.coldstart_description = cfg.coldstart.description
+        self.coldstart_description = build_guidance_description(cfg)
 
         # Top-N candidates
         self.top_k = self.scfg.top_candidates_size
